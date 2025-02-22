@@ -218,4 +218,4 @@ Ronaldo Jose Rodriguez Urbaneja
 ## Enlaces
 
   * [Repositorio de GitHub](https://github.com/RonaldoRodriguez/seccionjs)
-  * [Página de demostración](https://github.com/RonaldoRodriguez/seccionjs/examples/index.html)
+  * [Página de demostración](https://ronaldorodriguez.github.io/sectionjs/)
