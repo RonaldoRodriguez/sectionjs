@@ -192,16 +192,21 @@ En la carpeta `examples/` encontrarás ejemplos de uso de la librería. Para pro
 
 ## Uso en producción
 
-Para usar la librería en producción, se recomienda compilar los archivos minificados utilizando el ya mencionado `npm run build` comando:
+Para usar la librería en producción, se recomienda compilar los archivos minificados utilizando el ya mencionado `npm run build` comando.
 
 
 Los archivos minificados se encontrarán en la carpeta `dist/`. Puedes elegir entre `sectionjs-latest.min.js` (para navegadores modernos) o `sectionjs-legacy.min.js` (para navegadores antiguos).
 
+## Compatibilidad con navegadores modernos
 
+SectionJS latest es compatible con la mayoría de los navegadores modernos:
 
-## Compatibilidad con navegadores antiguos
+* **Firefox 52+**
+* **Safari 10.1+**
+* **Edge 15+**
+* **Chrome 55+**
 
-SecciónJS es compatible con la mayoría de los navegadores modernos y también con navegadores antiguos gracias a la transpilación con Babel y el empaquetado con Webpack.
+Si necesitas compatibilidad con navegadores antiguos, puedes utilizar la versión "legacy" de SectionJS, que se genera utilizando Babel y Webpack para asegurar la compatibilidad con navegadores más antiguos.
 
 ## Licencia
 
