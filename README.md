@@ -165,30 +165,31 @@ En la carpeta `examples/` encontrarás ejemplos de uso de la librería. Para pro
 ```
 ## Atributos `data-*`
 
-  * **`data-section`**: La URL de la fuente de datos.
-  * **`data-limit`**: El número de artículos por página.
-  * **`data-order`**: El orden de clasificación de los datos (`ASC` o `DESC`).
-  * **`data-by`**: El campo por el cual ordenar los datos.
-  * **`data-start`**: El índice de inicio para los datos.
-  * **`data-total`**: El número total de artículos (opcional).
-  * **`data-default-page`**: La página inicial a mostrar (opcional).
-  * **`data-local-order`**: Ordena los datos localmente en el navegador (`asc` o `desc`).
+| Atributo           | Descripción                                                                 | Valores posibles                     | Opcional |
+|--------------------|-----------------------------------------------------------------------------|--------------------------------------|----------|
+| `data-section`     | La URL de la fuente de datos.                                               | Cualquier URL válida.                | No       |
+| `data-limit`       | El número de artículos por página.                                          | Número entero positivo.              | No       |
+| `data-order`       | El orden de clasificación de los datos.                                     | `ASC` (ascendente) o `DESC` (descendente). | No       |
+| `data-by`          | El campo por el cual ordenar los datos.                                     | Nombre del campo.                    | No       |
+| `data-start`       | El índice de inicio para los datos.                                         | Número entero positivo.              | No       |
+| `data-total`       | El número total de artículos.                                               | Número entero positivo.              | Sí       |
+| `data-default-page`| La página inicial a mostrar.                                                | Número entero positivo.              | Sí       |
+| `data-local-order` | Ordena los datos localmente en el navegador.                                | `asc` (ascendente) o `desc` (descendente). | Sí       |
 
-  ### Atributos de paginación
+## Atributos de paginación
 
-  * **`data-target`**: El `id` del contenedor de artículos que se paginará. Este atributo se utiliza en el contenedor de paginación para vincularlo con el contenedor de artículos correspondiente.
-  * **`data-action`**: La acción que realizará el botón de paginación. Puede ser `prev` para el botón anterior, `next` para el botón siguiente o `info` para el elemento que muestra la información de la página actual.
+| Atributo      | Descripción                                                                 | Valores posibles                     |
+|---------------|-----------------------------------------------------------------------------|--------------------------------------|
+| `data-target` | El `id` del contenedor de artículos que se paginará.                        | `id` del contenedor de artículos.    |
+| `data-action` | La acción que realizará el botón de paginación.                             | `prev`, `next`, o `info`.            |
 
+### Explicación:
 
-    ### Explicación:
-
-    * **`data-target`**: Este atributo se utiliza en el contenedor de paginación para especificar a qué contenedor de artículos se aplicará la paginación. El valor de este atributo debe coincidir con el `id` del contenedor de artículos.
-
-    * **`data-action`**: Este atributo se utiliza en los botones de paginación para indicar qué acción realizarán. Los valores posibles son:
-
-    * `prev`: Para el botón que muestra la página anterior.
-    * `next`: Para el botón que muestra la página siguiente.
-    * `info`: Para el elemento que muestra la información de la página actual (por ejemplo, "Página 2 de 5").
+- **`data-target`**: Este atributo se utiliza en el contenedor de paginación para especificar a qué contenedor de artículos se aplicará la paginación. El valor de este atributo debe coincidir con el `id` del contenedor de artículos.
+- **`data-action`**: Este atributo se utiliza en los botones de paginación para indicar qué acción realizarán. Los valores posibles son:
+  - `prev`: Para el botón que muestra la página anterior.
+  - `next`: Para el botón que muestra la página siguiente.
+  - `info`: Para el elemento que muestra la información de la página actual (por ejemplo, "Página 2 de 5").
 
 ## Uso en producción
 
