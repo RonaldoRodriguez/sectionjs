@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+      "target": "es2020", // o la versión más reciente que desees
+      "module": "esnext",
+      "outDir": "./build/latest",
+      "rootDir": "./src",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "moduleResolution": "node"
+    },
+    "include": ["src/**/*"]
+  }
