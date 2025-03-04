@@ -31,7 +31,7 @@
         <section class="container-fluid">
             <div class="pagination-container mb-2" data-target="posts-container" >
                 <button data-action="prev">Previous</button>
-                <span  data-action="info"></span>
+                <span  data-action="info">Página {{pageNow}} de {{totalPages}}</span>
                 <button data-action="next">Next</button>
             </div>
             <div class="row" id="posts-container" data-section="https://jsonplaceholder.org/posts" data-limit="5" data-order="asc" data-by="id">
@@ -50,7 +50,7 @@
         <section class="container-fluid">
             <div class="pagination-container" data-target="users-container">
                 <button data-action="prev">Previous</button>
-                <span data-action="info"></span>
+                <span data-action="info">Página {{pageNow}} de {{totalPages}}</span>
                 <button data-action="next">Next</button>
             </div>
             <div class="row" id="users-container" data-section="https://jsonplaceholder.org/users" data-limit="5" data-order="asc" data-by="id">
