@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <base data-ice="baseUrl" href="../../">
+  <title data-ice="title">src/sectionjs.js | sectionjs</title>
+  <link type="text/css" rel="stylesheet" href="css/style.css">
+  <link type="text/css" rel="stylesheet" href="css/prettify-tomorrow.css">
+  <script src="script/prettify/prettify.js"></script>
+  <script src="script/manual.js"></script>
+<meta name="description" content="Una librer&#xED;a JavaScript para renderizar contenido din&#xE1;micamente desde una fuente de datos."><meta property="twitter:card" content="summary"><meta property="twitter:title" content="sectionjs"><meta property="twitter:description" content="Una librer&#xED;a JavaScript para renderizar contenido din&#xE1;micamente desde una fuente de datos."></head>
+<body class="layout-container" data-ice="rootContainer">
+
+<header>
+  <a href="./">Home</a>
+  
+  <a href="identifiers.html">Reference</a>
+  <a href="source.html">Source</a>
+  
+  <div class="search-box">
+  <span>
+    <img src="./image/search.png">
+    <span class="search-input-edge"></span><input class="search-input"><span class="search-input-edge"></span>
+  </span>
+    <ul class="search-result"></ul>
+  </div>
+</header>
+
+<nav class="navigation" data-ice="nav"><div>
+  <ul>
+    
+  </ul>
+</div>
+</nav>
+
+<div class="content" data-ice="content"><h1 data-ice="title">src/sectionjs.js</h1>
+<pre class="source-code line-number raw-source-code"><code class="prettyprint linenums" data-ice="content">var __awaiter = (this &amp;&amp; this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator[&quot;throw&quot;](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this &amp;&amp; this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] &amp; 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g = Object.create((typeof Iterator === &quot;function&quot; ? Iterator : Object).prototype);
+    return g.next = verb(0), g[&quot;throw&quot;] = verb(1), g[&quot;return&quot;] = verb(2), typeof Symbol === &quot;function&quot; &amp;&amp; (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError(&quot;Generator is already executing.&quot;);
+        while (g &amp;&amp; (g = 0, op[0] &amp;&amp; (_ = 0)), _) try {
+            if (f = 1, y &amp;&amp; (t = op[0] &amp; 2 ? y[&quot;return&quot;] : op[0] ? y[&quot;throw&quot;] || ((t = y[&quot;return&quot;]) &amp;&amp; t.call(y), 0) : y.next) &amp;&amp; !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] &amp; 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length &gt; 0 &amp;&amp; t[t.length - 1]) &amp;&amp; (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 &amp;&amp; (!t || (op[1] &gt; t[0] &amp;&amp; op[1] &lt; t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 &amp;&amp; _.label &lt; t[1]) { _.label = t[1]; t = op; break; }
+                    if (t &amp;&amp; _.label &lt; t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] &amp; 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
+var __spreadArray = (this &amp;&amp; this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i &lt; l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
+var SectionJS = /** @class */ (function () {
+    /**
+     * Constructor de la clase SectionJS.
+     * @param articleContainer Contenedor HTML donde se renderizar&#xE1;n los datos.
+     * @throws Error si el contenedor no es v&#xE1;lido.
+     */
+    function SectionJS(articleContainer) {
+        // Plantilla para renderizar cada art&#xED;culo
+        this.articleTemplate = null;
+        // Plantillas para los elementos de informaci&#xF3;n (paginaci&#xF3;n, etc.)
+        this.infoTemplates = null;
+        // Datos cargados desde la fuente
+        this.data = null;
+        // Observador de cambios en los atributos del contenedor
+        this.observer = null;
+        // Indica si el observador est&#xE1; activo
+        this.observerActive = false;
+        if (!articleContainer) {
+            throw new Error(&quot;El contenedor proporcionado no es un elemento v&#xE1;lido.&quot;);
+        }
+        this.articleContainer = articleContainer;
+        // Inicializar elementos &quot;info&quot; y guardar sus plantillas
+        this.spanElements = __spreadArray(__spreadArray(__spreadArray([], Array.from(this.articleContainer.querySelectorAll(&apos;[data-action=&quot;info&quot;], [data-section-action=&quot;info&quot;]&apos;)), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;][data-action=\&quot;info\&quot;], [data-target=\&quot;&quot;).concat(this.articleContainer.id, &quot;\&quot;][data-section-action=\&quot;info\&quot;]&quot;))), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;]&quot;))).flatMap(function (container) {
+            return Array.from(container.querySelectorAll(&apos;[data-action=&quot;info&quot;], [data-section-action=&quot;info&quot;]&apos;));
+        }), true);
+        // Guardar una copia de cada elemento &quot;info&quot; como plantilla
+        this.infoTemplates = this.spanElements.map(function (element) { return element.cloneNode(true); });
+        // Asignar atributos del contenedor
+        this.dataSourceURL = articleContainer.getAttribute(&apos;data-section&apos;);
+        this.limit = this.validateNumber(articleContainer.getAttribute(&apos;data-limit&apos;), &apos;data-limit&apos;);
+        this.order = articleContainer.getAttribute(&apos;data-order&apos;) || &apos;ASC&apos;;
+        this.start = this.validateNumber(articleContainer.getAttribute(&apos;data-start&apos;), &apos;data-start&apos;) || 0;
+        this.orderBy = articleContainer.getAttribute(&apos;data-by&apos;);
+        this.total = this.validateNumber(articleContainer.getAttribute(&apos;data-total&apos;), &apos;data-total&apos;);
+        this.defaultPage = Math.max(1, this.validateNumber(articleContainer.getAttribute(&apos;data-default-page&apos;), &apos;data-default-page&apos;) || 1);
+        this.currentPage = this.defaultPage;
+        this.responsePath = articleContainer.getAttribute(&apos;data-response-path&apos;);
+        this.findKey = articleContainer.getAttribute(&apos;data-find&apos;);
+        // No activar el Observer por defecto
+    }
+    /**
+     * Activa el MutationObserver para detectar cambios en los atributos del contenedor.
+     */
+    SectionJS.prototype.enableObserver = function () {
+        var _this = this;
+        if (this.observerActive)
+            return;
+        var attributesToObserve = [
+            &apos;data-find&apos;, &apos;data-limit&apos;, &apos;data-order&apos;, &apos;data-start&apos;, &apos;data-by&apos;,
+            &apos;data-total&apos;, &apos;data-default-page&apos;, &apos;data-response-path&apos;, &apos;data-section&apos;
+        ];
+        this.observer = new MutationObserver(function (mutationsList) {
+            for (var _i = 0, mutationsList_1 = mutationsList; _i &lt; mutationsList_1.length; _i++) {
+                var mutation = mutationsList_1[_i];
+                if (mutation.type === &apos;attributes&apos; &amp;&amp; mutation.attributeName) {
+                    _this.handleAttrChange(mutation.attributeName);
+                }
+            }
+        });
+        this.observer.observe(this.articleContainer, {
+            attributes: true,
+            attributeFilter: attributesToObserve,
+            subtree: false
+        });
+        this.observerActive = true;
+    };
+    /**
+     * Desactiva el MutationObserver.
+     */
+    SectionJS.prototype.disableObserver = function () {
+        if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
+            this.observerActive = false;
+        }
+    };
+    /**
+     * Maneja cambios en los atributos detectados por el MutationObserver.
+     * @param attributeName Nombre del atributo que cambi&#xF3;.
+     */
+    SectionJS.prototype.handleAttrChange = function (attributeName) {
+        this.refresh(); // Simplemente refrescamos la secci&#xF3;n
+    };
+    /**
+     * Valida que un valor sea un n&#xFA;mero v&#xE1;lido.
+     * @param value Valor a validar.
+     * @param attributeName Nombre del atributo (para mensajes de error).
+     * @returns El n&#xFA;mero validado o null si no es v&#xE1;lido.
+     */
+    SectionJS.prototype.validateNumber = function (value, attributeName) {
+        if (value === null || value === undefined || value === &quot;&quot;)
+            return null;
+        var number = Number(value);
+        if (isNaN(number)) {
+            console.error(&quot;Error: El atributo &quot;.concat(attributeName, &quot; debe ser un n\u00FAmero.&quot;));
+            return null;
+        }
+        return number;
+    };
+    /**
+     * Carga los datos desde la fuente especificada en dataSourceURL.
+     * @returns Los datos cargados.
+     */
+    SectionJS.prototype.load = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var response, contentType, fullJsonData, filteredJsonData, textData, error_1;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this.dataSourceURL)
+                            return [2 /*return*/, null];
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 7, , 8]);
+                        return [4 /*yield*/, fetch(this.dataSourceURL)];
+                    case 2:
+                        response = _a.sent();
+                        if (!response.ok)
+                            throw new Error(&quot;Error: &quot;.concat(response.status));
+                        contentType = response.headers.get(&quot;Content-Type&quot;);
+                        if (!(contentType === null || contentType === void 0 ? void 0 : contentType.includes(&quot;application/json&quot;))) return [3 /*break*/, 4];
+                        return [4 /*yield*/, response.json()];
+                    case 3:
+                        fullJsonData = _a.sent();
+                        filteredJsonData = this.responsePath ? this.getValue(fullJsonData, this.responsePath) : fullJsonData;
+                        this.data = Array.isArray(filteredJsonData) ? filteredJsonData : [filteredJsonData];
+                        this.articleContainer.dispatchEvent(new CustomEvent(&apos;sectionjs:datachanged&apos;, { detail: { data: this.data } }));
+                        return [2 /*return*/, fullJsonData];
+                    case 4: return [4 /*yield*/, response.text()];
+                    case 5:
+                        textData = _a.sent();
+                        this.data = [textData];
+                        return [2 /*return*/, textData];
+                    case 6: return [3 /*break*/, 8];
+                    case 7:
+                        error_1 = _a.sent();
+                        console.error(error_1);
+                        this.articleContainer.innerHTML = &quot;&lt;p&gt;Error al cargar datos.&lt;/p&gt;&quot;;
+                        throw error_1;
+                    case 8: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Busca un valor espec&#xED;fico en los datos cargados.
+     * @param fullData Datos completos (opcional, si no se proporciona, se cargan autom&#xE1;ticamente).
+     */
+    SectionJS.prototype.findKeyValue = function () {
+        return __awaiter(this, arguments, void 0, function (fullData) {
+            var findKey, defaultValue, value, error_2;
+            if (fullData === void 0) { fullData = null; }
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this.articleContainer)
+                            return [2 /*return*/];
+                        findKey = this.articleContainer.getAttribute(&apos;data-find&apos;);
+                        defaultValue = this.articleContainer.getAttribute(&apos;data-find-default&apos;) || &apos;none&apos;;
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 4, , 5]);
+                        if (!!fullData) return [3 /*break*/, 3];
+                        return [4 /*yield*/, this.load()];
+                    case 2:
+                        fullData = _a.sent();
+                        _a.label = 3;
+                    case 3:
+                        if (findKey) {
+                            value = this.getValue(fullData, findKey) || defaultValue;
+                            this.articleContainer.setAttribute(&apos;data-find-value&apos;, value);
+                        }
+                        return [3 /*break*/, 5];
+                    case 4:
+                        error_2 = _a.sent();
+                        console.error(&quot;Error en findValue:&quot;, error_2);
+                        return [3 /*break*/, 5];
+                    case 5: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Actualiza los atributos de la instancia en funci&#xF3;n del contenedor.
+     */
+    SectionJS.prototype.updateAttrs = function () {
+        this.dataSourceURL = this.articleContainer.getAttribute(&apos;data-section&apos;);
+        this.limit = this.validateNumber(this.articleContainer.getAttribute(&apos;data-limit&apos;), &apos;data-limit&apos;);
+        this.order = this.articleContainer.getAttribute(&apos;data-order&apos;) || &apos;ASC&apos;;
+        this.start = this.validateNumber(this.articleContainer.getAttribute(&apos;data-start&apos;), &apos;data-start&apos;) || 0;
+        this.orderBy = this.articleContainer.getAttribute(&apos;data-by&apos;);
+        this.total = this.validateNumber(this.articleContainer.getAttribute(&apos;data-total&apos;), &apos;data-total&apos;);
+        this.defaultPage = Math.max(1, this.validateNumber(this.articleContainer.getAttribute(&apos;data-default-page&apos;), &apos;data-default-page&apos;) || 1);
+        this.responsePath = this.articleContainer.getAttribute(&apos;data-response-path&apos;);
+        this.findKey = this.articleContainer.getAttribute(&apos;data-find&apos;);
+    };
+    /**
+     * Obtiene los datos de una p&#xE1;gina espec&#xED;fica.
+     * @param page N&#xFA;mero de la p&#xE1;gina.
+     * @returns Los datos de la p&#xE1;gina.
+     */
+    SectionJS.prototype.getPage = function (page) {
+        var _this = this;
+        var _a, _b;
+        if (!this.data)
+            return [];
+        var dataToUse = this.data;
+        // Ordenar los datos si se especifica un orden
+        if (Array.isArray(dataToUse) &amp;&amp; this.orderBy) {
+            dataToUse = dataToUse.slice().sort(function (a, b) {
+                var valueA = _this.getValue(a, _this.orderBy);
+                var valueB = _this.getValue(b, _this.orderBy);
+                return _this.order.toLowerCase() === &apos;asc&apos; ? (valueA &lt; valueB ? -1 : 1) : (valueA &gt; valueB ? -1 : 1);
+            });
+        }
+        // Calcular &#xED;ndices de la p&#xE1;gina
+        var pageSize = (_a = this.limit) !== null &amp;&amp; _a !== void 0 ? _a : dataToUse.length;
+        var startIndex = (page - 1) * pageSize + this.start;
+        var endIndex = Math.min(startIndex + pageSize, (_b = this.total) !== null &amp;&amp; _b !== void 0 ? _b : dataToUse.length);
+        return dataToUse.slice(startIndex, endIndex);
+    };
+    /**
+     * Renderiza los datos en el contenedor.
+     * @param pageData Datos de la p&#xE1;gina a renderizar.
+     */
+    SectionJS.prototype.render = function (pageData) {
+        var _this = this;
+        if (!this.articleContainer)
+            return;
+        var elementosOrdenados = [];
+        var plantilla = null;
+        // Desactivar temporalmente el observer
+        var wasObserverActive = this.observerActive;
+        if (wasObserverActive) {
+            this.disableObserver();
+        }
+        // Recorrer los elementos hijos del contenedor
+        Array.from(this.articleContainer.children).forEach(function (elemento) {
+            var _a;
+            var element = elemento;
+            // Si el elemento es est&#xE1;tico, lo agregamos al array de elementos ordenados
+            if (element.hasAttribute(&apos;data-section-static&apos;)) {
+                elementosOrdenados.push(element);
+                element.remove(); // Lo removemos temporalmente del contenedor
+            }
+            // Si el elemento es candidato a plantilla (el primero que no es est&#xE1;tico o tiene data-section-render)
+            else if (element.hasAttribute(&apos;data-section-render&apos;) || !plantilla) {
+                if (!plantilla) {
+                    plantilla = element;
+                    _this.articleTemplate = (_a = _this.articleTemplate) !== null &amp;&amp; _a !== void 0 ? _a : plantilla;
+                    if (!_this.articleTemplate || !(_this.articleTemplate instanceof HTMLElement)) {
+                        throw new Error(&quot;No se pudo encontrar una plantilla v&#xE1;lida en el contenedor.&quot;);
+                    }
+                    // Renderizar los datos usando la plantilla
+                    pageData.forEach(function (articleData) {
+                        var elementoRenderizado = _this.articleTemplate.cloneNode(true);
+                        elementoRenderizado.querySelectorAll(&apos;*&apos;).forEach(function (el) {
+                            _this.processText(el, articleData);
+                            _this.processAttrs(el, articleData);
+                            _this.assignSrc(el);
+                        });
+                        elementosOrdenados.push(elementoRenderizado);
+                    });
+                }
+                element.remove(); // Remover la plantilla original del contenedor
+            }
+            // Si el elemento no es est&#xE1;tico ni plantilla, lo removemos
+            else {
+                element.remove();
+            }
+        });
+        // Agregar los elementos ordenados de vuelta al contenedor
+        elementosOrdenados.forEach(function (elemento) { return _this.articleContainer.appendChild(elemento); });
+        // Marcar el contenedor como renderizado
+        this.articleContainer.setAttribute(&apos;data-section-rendered&apos;, &apos;true&apos;);
+        // Reactivar el observer si estaba activo
+        if (wasObserverActive) {
+            this.enableObserver();
+        }
+        // Reconectar botones, actualizar info y botones
+        this.reconnectButtons();
+        this.updateInfo();
+        this.updateButtons();
+        // Disparar evento de renderizado
+        this.articleContainer.dispatchEvent(new CustomEvent(&apos;sectionjs:rendered&apos;, { detail: { pageData: pageData } }));
+    };
+    /**
+     * Reconecta los botones de paginaci&#xF3;n.
+     */
+    SectionJS.prototype.reconnectButtons = function () {
+        var _this = this;
+        if (!this.articleContainer)
+            return;
+        // Seleccionar botones dentro de contenedores est&#xE1;ticos o fuera del contenedor principal
+        var prevButtons = __spreadArray(__spreadArray([], Array.from(this.articleContainer.querySelectorAll(&apos;[data-section-static] [data-action=&quot;prev&quot;]&apos;)), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;][data-action=\&quot;prev\&quot;]&quot;))), true).filter(function (button) { return button !== null; });
+        var nextButtons = __spreadArray(__spreadArray([], Array.from(this.articleContainer.querySelectorAll(&apos;[data-section-static] [data-action=&quot;next&quot;]&apos;)), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;][data-action=\&quot;next\&quot;]&quot;))), true).filter(function (button) { return button !== null; });
+        // Asignar eventos a los botones
+        prevButtons.forEach(function (button) { return button.onclick = function () { return _this.paginate(&apos;prev&apos;); }; });
+        nextButtons.forEach(function (button) { return button.onclick = function () { return _this.paginate(&apos;next&apos;); }; });
+    };
+    /**
+     * Procesa el texto de un elemento y reemplaza las variables con los datos.
+     * @param element Elemento a procesar.
+     * @param data Datos a utilizar para el reemplazo.
+     */
+    SectionJS.prototype.processText = function (element, data) {
+        var _this = this;
+        Array.from(element.childNodes)
+            .filter(function (node) { return node.nodeType === Node.TEXT_NODE; })
+            .forEach(function (textNode) {
+            textNode.textContent = _this.replaceText(textNode.textContent || &apos;&apos;, data);
+        });
+    };
+    /**
+     * Procesa los atributos de un elemento y reemplaza las variables con los datos.
+     * @param element Elemento a procesar.
+     * @param data Datos a utilizar para el reemplazo.
+     */
+    SectionJS.prototype.processAttrs = function (element, data) {
+        var _this = this;
+        Array.from(element.attributes).forEach(function (attr) {
+            element.setAttribute(attr.name, _this.replaceText(attr.value, data));
+        });
+    };
+    /**
+     * Asigna el atributo `src` a elementos multimedia (img, audio, video) si tienen `data-src`.
+     * @param element Elemento a procesar.
+     */
+    SectionJS.prototype.assignSrc = function (element) {
+        if ([&apos;IMG&apos;, &apos;AUDIO&apos;, &apos;VIDEO&apos;].includes(element.tagName) &amp;&amp; element.hasAttribute(&apos;data-src&apos;)) {
+            element.setAttribute(&apos;src&apos;, element.getAttribute(&apos;data-src&apos;));
+        }
+    };
+    /**
+     * Reemplaza las variables en un texto con los valores correspondientes de los datos.
+     * @param text Texto a procesar.
+     * @param data Datos a utilizar para el reemplazo.
+     * @returns Texto con las variables reemplazadas.
+     */
+    SectionJS.prototype.replaceText = function (text, data) {
+        var _this = this;
+        return text.replace(/{{(.*?)}}/g, function (_, clave) { return _this.getValue(data, clave) || &apos;&apos;; });
+    };
+    /**
+     * Obtiene un valor de un objeto utilizando una clave en formato de ruta (ej: &quot;user.name&quot;).
+     * @param obj Objeto del cual obtener el valor.
+     * @param key Clave en formato de ruta.
+     * @returns El valor encontrado o una cadena vac&#xED;a si no existe.
+     */
+    SectionJS.prototype.getValue = function (obj, key) {
+        return key.split(&apos;.&apos;).reduce(function (value, k) { return (value &amp;&amp; typeof value === &apos;object&apos; ? value[k] : &apos;&apos;); }, obj);
+    };
+    /**
+     * Actualiza los elementos de informaci&#xF3;n (paginaci&#xF3;n, etc.).
+     */
+    SectionJS.prototype.updateInfo = function () {
+        var _this = this;
+        var _a, _b, _c;
+        if (!this.articleContainer || !this.spanElements.length || !this.infoTemplates.length)
+            return;
+        var totalPages = Math.ceil((((_a = this.data) === null || _a === void 0 ? void 0 : _a.length) || 0) / (this.limit || ((_b = this.data) === null || _b === void 0 ? void 0 : _b.length) || 1));
+        var itemsTotal = ((_c = this.data) === null || _c === void 0 ? void 0 : _c.length) || 0;
+        var itemsNow = this.getPage(this.currentPage).length;
+        var firstItemIndex = (this.currentPage - 1) * (this.limit || 0) + 1;
+        var lastItemIndex = Math.min(firstItemIndex + (this.limit || 0) - 1, itemsTotal);
+        // Seleccionar elementos &quot;info&quot; dentro de contenedores est&#xE1;ticos o fuera del contenedor principal
+        var infoElements = __spreadArray(__spreadArray([], Array.from(this.articleContainer.querySelectorAll(&apos;[data-section-static] [data-action=&quot;info&quot;]&apos;)), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;][data-action=\&quot;info\&quot;]&quot;))), true).filter(function (element) { return element !== null; });
+        // Actualizar el contenido de los elementos &quot;info&quot; usando sus propias plantillas
+        infoElements.forEach(function (infoElement, index) {
+            var templateElement = _this.infoTemplates ? _this.infoTemplates[index] : null;
+            var template = templateElement ? templateElement.textContent : null;
+            if (template) {
+                infoElement.textContent = template
+                    .replace(&apos;{{pageNow}}&apos;, _this.currentPage.toString())
+                    .replace(&apos;{{totalPages}}&apos;, totalPages.toString())
+                    .replace(&apos;{{itemsNow}}&apos;, itemsNow.toString())
+                    .replace(&apos;{{itemsTotal}}&apos;, itemsTotal.toString())
+                    .replace(&apos;{{firstItemIndex}}&apos;, firstItemIndex.toString())
+                    .replace(&apos;{{lastItemIndex}}&apos;, lastItemIndex.toString());
+            }
+        });
+    };
+    /**
+     * Actualiza el estado de los botones de paginaci&#xF3;n.
+     */
+    SectionJS.prototype.updateButtons = function () {
+        var _this = this;
+        var _a, _b;
+        if (!this.articleContainer)
+            return;
+        var totalPages = Math.ceil((((_a = this.data) === null || _a === void 0 ? void 0 : _a.length) || 0) / (this.limit || ((_b = this.data) === null || _b === void 0 ? void 0 : _b.length) || 1));
+        // Seleccionar botones dentro de contenedores est&#xE1;ticos o fuera del contenedor principal
+        var prevButtons = __spreadArray(__spreadArray([], Array.from(this.articleContainer.querySelectorAll(&apos;[data-section-static] [data-action=&quot;prev&quot;]&apos;)), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;][data-action=\&quot;prev\&quot;]&quot;))), true).filter(function (button) { return button !== null; });
+        var nextButtons = __spreadArray(__spreadArray([], Array.from(this.articleContainer.querySelectorAll(&apos;[data-section-static] [data-action=&quot;next&quot;]&apos;)), true), Array.from(document.querySelectorAll(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;][data-action=\&quot;next\&quot;]&quot;))), true).filter(function (button) { return button !== null; });
+        // Actualizar el estado de los botones
+        prevButtons.forEach(function (button) { return button.disabled = _this.currentPage === 1; });
+        nextButtons.forEach(function (button) { return button.disabled = _this.currentPage === totalPages; });
+    };
+    /**
+     * Refresca la secci&#xF3;n en funci&#xF3;n de los cambios en los atributos.
+     */
+    SectionJS.prototype.refresh = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var currentAttributes, totalPages;
+            var _a, _b;
+            return __generator(this, function (_c) {
+                switch (_c.label) {
+                    case 0:
+                        if (!this.articleContainer)
+                            return [2 /*return*/];
+                        currentAttributes = {
+                            limit: this.limit,
+                            order: this.order,
+                            start: this.start,
+                            orderBy: this.orderBy,
+                            total: this.total,
+                            defaultPage: this.defaultPage,
+                            dataSourceURL: this.dataSourceURL,
+                            findKey: this.findKey
+                        };
+                        this.updateAttrs();
+                        if (!(currentAttributes.limit !== this.limit || currentAttributes.order !== this.order ||
+                            currentAttributes.start !== this.start || currentAttributes.orderBy !== this.orderBy ||
+                            currentAttributes.total !== this.total || currentAttributes.defaultPage !== this.defaultPage ||
+                            currentAttributes.dataSourceURL !== this.dataSourceURL || currentAttributes.findKey !== this.findKey)) return [3 /*break*/, 5];
+                        if (!(this.dataSourceURL &amp;&amp; (currentAttributes.total !== this.total || currentAttributes.dataSourceURL !== this.dataSourceURL))) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this.load()];
+                    case 1:
+                        _c.sent();
+                        _c.label = 2;
+                    case 2:
+                        if (!(currentAttributes.findKey !== this.findKey)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.findKeyValue()];
+                    case 3:
+                        _c.sent();
+                        _c.label = 4;
+                    case 4:
+                        if (currentAttributes.defaultPage !== this.defaultPage) {
+                            this.currentPage = this.defaultPage;
+                        }
+                        totalPages = Math.ceil((((_a = this.data) === null || _a === void 0 ? void 0 : _a.length) || 0) / (this.limit || ((_b = this.data) === null || _b === void 0 ? void 0 : _b.length) || 1));
+                        this.currentPage = Math.min(this.currentPage, totalPages);
+                        this.render(this.getPage(this.currentPage));
+                        _c.label = 5;
+                    case 5: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Navega entre las p&#xE1;ginas.
+     * @param action Acci&#xF3;n a realizar (&apos;prev&apos; o &apos;next&apos;).
+     */
+    SectionJS.prototype.paginate = function (action) {
+        if (!this.articleContainer || !this.data)
+            return;
+        var totalPages = Math.ceil(this.data.length / (this.limit || this.data.length));
+        if (action === &apos;prev&apos; &amp;&amp; this.currentPage &gt; 1) {
+            this.currentPage--;
+        }
+        else if (action === &apos;next&apos; &amp;&amp; this.currentPage &lt; totalPages) {
+            this.currentPage++;
+        }
+        this.render(this.getPage(this.currentPage));
+    };
+    /**
+     * Agrega un listener para el evento &apos;sectionjs:getdata&apos;.
+     */
+    SectionJS.prototype.addListener = function () {
+        var _this = this;
+        if (!this.articleContainer)
+            return;
+        this.articleContainer.addEventListener(&apos;sectionjs:getdata&apos;, function (event) {
+            var customEvent = event;
+            var data = customEvent.detail.data;
+            var value = data &amp;&amp; _this.data ? _this.getValue(_this.data, data) : _this.data;
+            _this.articleContainer.dispatchEvent(new CustomEvent(&quot;sectionjs:getdata:&quot;.concat(data || &apos;all&apos;), { detail: { value: value } }));
+        });
+    };
+    /**
+     * Inicializa todas las instancias de SectionJS en la p&#xE1;gina.
+     */
+    SectionJS.initAll = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var articleContainers, _i, articleContainers_1, articleContainer, section;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        articleContainers = document.querySelectorAll(&apos;[data-section]&apos;);
+                        if (articleContainers.length === 0) {
+                            console.log(&quot;SectionJS: data-section no encontrado. SectionJS inactivo.&quot;);
+                            return [2 /*return*/];
+                        }
+                        SectionJS.instances = [];
+                        _i = 0, articleContainers_1 = articleContainers;
+                        _a.label = 1;
+                    case 1:
+                        if (!(_i &lt; articleContainers_1.length)) return [3 /*break*/, 4];
+                        articleContainer = articleContainers_1[_i];
+                        section = new SectionJS(articleContainer);
+                        SectionJS.instances.push(section);
+                        return [4 /*yield*/, section.initSelf()];
+                    case 2:
+                        _a.sent(); // Inicializar cada instancia individualmente
+                        _a.label = 3;
+                    case 3:
+                        _i++;
+                        return [3 /*break*/, 1];
+                    case 4: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Inicializa la instancia actual de SectionJS.
+     */
+    SectionJS.prototype.initSelf = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var totalPages, hasRenderedArticles, paginationContainer, prevButton, nextButton;
+            var _this = this;
+            var _a, _b;
+            return __generator(this, function (_c) {
+                switch (_c.label) {
+                    case 0:
+                        this.addListener();
+                        return [4 /*yield*/, this.load()];
+                    case 1:
+                        _c.sent();
+                        return [4 /*yield*/, this.findKeyValue()];
+                    case 2:
+                        _c.sent();
+                        totalPages = Math.ceil((((_a = this.data) === null || _a === void 0 ? void 0 : _a.length) || 0) / (this.limit || ((_b = this.data) === null || _b === void 0 ? void 0 : _b.length) || 1));
+                        this.currentPage = Math.min(this.currentPage, totalPages);
+                        hasRenderedArticles = this.articleContainer.hasAttribute(&apos;data-section-rendered&apos;);
+                        if (!hasRenderedArticles) {
+                            this.render(this.getPage(this.currentPage));
+                        }
+                        paginationContainer = document.querySelector(&quot;[data-target=\&quot;&quot;.concat(this.articleContainer.id, &quot;\&quot;]&quot;));
+                        prevButton = paginationContainer === null || paginationContainer === void 0 ? void 0 : paginationContainer.querySelector(&apos;button[data-action=&quot;prev&quot;]&apos;);
+                        nextButton = paginationContainer === null || paginationContainer === void 0 ? void 0 : paginationContainer.querySelector(&apos;button[data-action=&quot;next&quot;]&apos;);
+                        if (prevButton)
+                            prevButton.onclick = function () { return _this.paginate(&apos;prev&apos;); };
+                        if (nextButton)
+                            nextButton.onclick = function () { return _this.paginate(&apos;next&apos;); };
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Aplica un cambio en un atributo del contenedor y refresca la secci&#xF3;n.
+     * @param containerId ID del contenedor.
+     * @param attributeName Nombre del atributo a cambiar.
+     * @param attributeValue Nuevo valor del atributo.
+     */
+    SectionJS.apply = function (containerId, attributeName, attributeValue) {
+        return __awaiter(this, void 0, void 0, function () {
+            var articleContainer, section, wasObserverActive, currentValue;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        articleContainer = document.getElementById(containerId);
+                        if (!articleContainer) return [3 /*break*/, 3];
+                        section = SectionJS.instances.find(function (instance) { return instance.articleContainer === articleContainer; });
+                        if (!section) return [3 /*break*/, 3];
+                        wasObserverActive = section.observerActive;
+                        if (wasObserverActive) {
+                            section.disableObserver(); // Desactivar el Observer solo si estaba activo
+                        }
+                        currentValue = section.articleContainer.getAttribute(attributeName);
+                        if (!(currentValue !== attributeValue.toString())) return [3 /*break*/, 2];
+                        section.articleContainer.setAttribute(attributeName, attributeValue.toString());
+                        return [4 /*yield*/, section.refresh()];
+                    case 1:
+                        _a.sent();
+                        _a.label = 2;
+                    case 2:
+                        if (wasObserverActive) {
+                            section.enableObserver(); // Reactivar el Observer solo si estaba activo
+                        }
+                        _a.label = 3;
+                    case 3: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Cambia un atributo del contenedor y refresca la secci&#xF3;n.
+     * @param attributeName Nombre del atributo a cambiar.
+     * @param attributeValue Nuevo valor del atributo.
+     */
+    SectionJS.prototype.setAttribute = function (attributeName, attributeValue) {
+        return __awaiter(this, void 0, void 0, function () {
+            var wasObserverActive, currentValue;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        wasObserverActive = this.observerActive;
+                        if (wasObserverActive) {
+                            this.disableObserver(); // Desactivar el Observer solo si estaba activo
+                        }
+                        currentValue = this.articleContainer.getAttribute(attributeName);
+                        if (!(currentValue !== attributeValue.toString())) return [3 /*break*/, 2];
+                        this.articleContainer.setAttribute(attributeName, attributeValue.toString());
+                        return [4 /*yield*/, this.refresh()];
+                    case 1:
+                        _a.sent();
+                        _a.label = 2;
+                    case 2:
+                        if (wasObserverActive) {
+                            this.enableObserver(); // Reactivar el Observer solo si estaba activo
+                        }
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    // Lista de todas las instancias de SectionJS creadas
+    SectionJS.instances = [];
+    return SectionJS;
+}());
+</code></pre>
+
+</div>
+
+<footer class="footer">
+  Generated by <a href="https://esdoc.org">ESDoc<span data-ice="esdocVersion">(1.1.0)</span><img src="./image/esdoc-logo-mini-black.png"></a>
+</footer>
+
+<script src="script/search_index.js"></script>
+<script src="script/search.js"></script>
+<script src="script/pretty-print.js"></script>
+<script src="script/inherited-summary.js"></script>
+<script src="script/test-summary.js"></script>
+<script src="script/inner-link.js"></script>
+<script src="script/patch-for-local.js"></script>
+</body>
+</html>

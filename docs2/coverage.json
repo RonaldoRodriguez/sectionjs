@@ -1,0 +1,17 @@
+{
+  "coverage": "0%",
+  "expectCount": 4,
+  "actualCount": 0,
+  "files": {
+    "src/sectionjs.js": {
+      "expectCount": 4,
+      "actualCount": 0,
+      "undocumentLines": [
+        1,
+        10,
+        37,
+        46
+      ]
+    }
+  }
+}
