@@ -1,227 +1,217 @@
-# SecciónJS
+# Documentación de la Clase `SectionJS`
 
-SecciónJS es una librería JavaScript ligera y flexible que te permite renderizar contenido dinámicamente desde una fuente de datos. Con SecciónJS, puedes crear fácilmente listas paginadas, galerías de imágenes y otros componentes dinámicos en tu sitio web.
+La clase `SectionJS` es una herramienta diseñada para gestionar y renderizar secciones dinámicas en una página web. Permite cargar datos desde una fuente externa, paginar los datos, y actualizar la interfaz de usuario en función de los cambios en los atributos del contenedor. A continuación se detalla la funcionalidad y uso de esta clase.
 
-## Características
+---
 
-* **Renderizado dinámico:** Carga y muestra datos desde una URL remota.
-* **Paginación:** Navega fácilmente entre grandes conjuntos de datos.
-* **Plantillas:** Utiliza plantillas HTML para definir la estructura de tus componentes.
-* **Personalización:** Configura la librería con atributos `data-*`.
-* **Compatibilidad:** Funciona en la mayoría de los navegadores modernos y navegadores antiguos (gracias a Babel y Webpack).
+## Índice
 
-## Instalación
+1. [Introducción](#introducción)
+2. [Instalación y Uso](#instalación-y-uso)
+3. [Propiedades](#propiedades)
+4. [Métodos](#métodos)
+   - [Constructor](#constructor)
+   - [enableObserver](#enableobserver)
+   - [disableObserver](#disableobserver)
+   - [refresh](#refresh)
+   - [initAll](#initall)
+   - [initSelf](#initself)
+   - [apply](#apply)
+   - [setAttribute](#setattribute)
+5. [Eventos](#eventos)
+6. [Ejemplos de Uso](#ejemplos-de-uso)
+7. [Consideraciones](#consideraciones)
 
-1.  Clona el repositorio desde GitHub:
+---
 
-    ```bash
-    git clone https://github.com/RonaldoRodriguez/seccionjs.git
-    ```
+## Introducción
 
-2.  Navega hasta el directorio del proyecto:
+`SectionJS` es una clase que facilita la creación de secciones dinámicas en una página web. Permite cargar datos desde una URL, paginarlos, y renderizarlos en un contenedor HTML. Además, incluye funcionalidades como la detección de cambios en los atributos del contenedor y la actualización automática de la interfaz.
 
-    ```bash
-    cd seccionjs
-    ```
+---
 
-3.  Instala las dependencias:
+## Instalación y Uso
 
-    ```bash
-    npm install
-    ```
+Para utilizar `SectionJS`, simplemente incluye el archivo JavaScript que contiene la clase en tu proyecto y sigue los pasos a continuación:
 
-4.  Construye la librería:
+1. **Estructura HTML**: Asegúrate de tener un contenedor con el atributo `data-section` que apunte a la URL de los datos.
 
-    ```bash
-    npm run build
-    ```
+   ```html
+   <div id="mySection" data-section="https://api.example.com/data"></div>
+   ```
 
-5.  Los archivos generados se encontrarán en la carpeta `dist/`.
+2. **Inicialización**: Inicializa `SectionJS` llamando al método `initAll`.
 
+   ```javascript
+   SectionJS.initAll();
+   ```
 
-### Ejemplo rápido
+3. **Personalización**: Puedes modificar los atributos del contenedor para cambiar el comportamiento de la sección (paginación, ordenamiento, etc.).
 
-En la carpeta `examples/` encontrarás ejemplos de uso de la librería. Para probarlos rápidamente, abre el archivo `index.html` en tu navegador.
+---
 
-## Uso
+## Propiedades
 
-### Ejemplo básico
+| Propiedad               | Tipo                     | Descripción                                                                 |
+|-------------------------|--------------------------|-----------------------------------------------------------------------------|
+| `instances`             | `SectionJS[]`            | Lista de todas las instancias de `SectionJS` creadas.                       |
+| `articleContainer`       | `HTMLElement`            | Contenedor HTML donde se renderizarán los datos.                            |
+| `articleTemplate`        | `Element \| null`        | Plantilla para renderizar cada artículo.                                    |
+| `infoTemplates`          | `Element[] \| null`      | Plantillas para los elementos de información (paginación, etc.).            |
+| `spanElements`           | `Element[]`              | Elementos que muestran información adicional (paginación, etc.).            |
+| `dataSourceURL`          | `string \| null`         | URL de la fuente de datos.                                                  |
+| `limit`                  | `number \| null`         | Número máximo de elementos por página.                                      |
+| `order`                  | `string`                 | Orden de los datos (`ASC` o `DESC`).                                        |
+| `start`                  | `number`                 | Índice de inicio para la paginación.                                        |
+| `orderBy`                | `string \| null`         | Atributo por el cual ordenar los datos.                                     |
+| `total`                  | `number \| null`         | Número total de elementos.                                                  |
+| `defaultPage`            | `number`                 | Página por defecto al cargar la sección.                                    |
+| `currentPage`            | `number`                 | Página actual.                                                              |
+| `data`                   | `any[] \| null`          | Datos cargados desde la fuente.                                             |
+| `responsePath`           | `string \| null`         | Ruta dentro del JSON de respuesta para obtener los datos.                   |
+| `findKey`                | `string \| null`         | Clave para buscar un valor específico en los datos.                         |
+| `observer`               | `MutationObserver \| null` | Observador de cambios en los atributos del contenedor.                     |
+| `observerActive`         | `boolean`                | Indica si el observador está activo.                                        |
 
-1.  Crea un contenedor para tus artículos con el atributo `data-section`:
+---
 
-    ```html
-    <div data-section="https://jsonplaceholder.typicode.com/posts">
-        <article>
-            <h3>{{title}}</h3>
-            <p>{{body}}</p>
-        </article>
-    </div>
-    ```
+## Métodos
 
-### Ejemplo con paginación
+### Constructor
 
-1.  Crea un contenedor para tus artículos con el atributo `data-section` y `id="mi-contenedor"`:
+```typescript
+constructor(articleContainer: HTMLElement)
+```
 
-    ```html
-    <div id="mi-contenedor" data-section="https://jsonplaceholder.typicode.com/posts" data-limit="5">
-        <article>
-            <h3>{{title}}</h3>
-            <p>{{body}}</p>
-        </article>
-    </div>
-    ```
+Inicializa una nueva instancia de `SectionJS`.
 
-2.  Crea un contenedor de paginación con el atributo `data-target`:
+- **Parámetros**:
+  - `articleContainer`: Contenedor HTML donde se renderizarán los datos.
 
-    ```html
-    <div class="pagination-container" data-target="mi-contenedor">
-        <button data-action="prev">Anterior</button>
-        <span data-action="info"></span>
-        <button data-action="next">Siguiente</button>
-    </div>
-    ```
+---
 
-### Ejemplo completo
+### enableObserver
+
+```typescript
+public enableObserver(): void
+```
+
+Activa el `MutationObserver` para detectar cambios en los atributos del contenedor.
+
+---
+
+### disableObserver
+
+```typescript
+public disableObserver(): void
+```
+
+Desactiva el `MutationObserver`.
+
+---
+
+### refresh
+
+```typescript
+private async refresh(): Promise<void>
+```
+
+Actualiza la sección en función de los cambios en los atributos del contenedor.
+
+---
+
+### initAll
+
+```typescript
+public static async initAll(): Promise<void>
+```
+
+Inicializa todas las instancias de `SectionJS` en la página.
+
+---
+
+### initSelf
+
+```typescript
+public async initSelf(): Promise<void>
+```
+
+Inicializa la instancia actual de `SectionJS`.
+
+---
+
+### apply
+
+```typescript
+public static async apply(containerId: string, attributeName: string, attributeValue: string | number): Promise<void>
+```
+
+Aplica un cambio en un atributo del contenedor y refresca la sección.
+
+- **Parámetros**:
+  - `containerId`: ID del contenedor.
+  - `attributeName`: Nombre del atributo a cambiar.
+  - `attributeValue`: Nuevo valor del atributo.
+
+---
+
+### setAttribute
+
+```typescript
+public async setAttribute(attributeName: string, attributeValue: string | number): Promise<void>
+```
+
+Cambia un atributo del contenedor y refresca la sección.
+
+- **Parámetros**:
+  - `attributeName`: Nombre del atributo a cambiar.
+  - `attributeValue`: Nuevo valor del atributo.
+
+---
+
+## Eventos
+
+| Evento                  | Descripción                                                                 |
+|-------------------------|-----------------------------------------------------------------------------|
+| `sectionjs:datachanged`  | Se dispara cuando los datos han cambiado.                                   |
+| `sectionjs:rendered`     | Se dispara cuando la sección ha sido renderizada.                           |
+| `sectionjs:getdata`      | Se dispara para obtener datos específicos de la sección.                    |
+
+---
+
+## Ejemplos de Uso
+
+### Ejemplo 1: Inicialización Básica
 
 ```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <title>SecciónJS</title>
-    <style>
-        .pagination-container {
-            display: flex;
-         justify-content:center;
-            margin-top: 20px;
-        }
-
-        .pagination-container button,
-        .pagination-container span {
-            margin: 0 5px;
-            padding: 5px 10px;
-            border: 1px solid #ccc;
-            cursor: pointer;
-        }
-
-        .pagination-container button:disabled {
-            opacity: 0.5;
-            cursor: default;
-        }
-    </style>
-</head>
-<body>
-    <main>
-        <section class="container-fluid">
-            <div class="pagination-container mb-2" data-target="posts-container" >
-                <button data-action="prev">Previous</button>
-                <span  data-action="info"></span>
-                <button data-action="next">Next</button>
-            </div>
-            <div class="row" id="posts-container" data-section="https://jsonplaceholder.org/posts" data-limit="5" data-order="asc" data-by="id">
-            <!--Bootstrap: class-->
-                <article class="col-md-6">
-                    <h2>{{title}}</h2>
-                    <a href="{{url}}">{{title}}</a>
-                    <br />
-                    <img data-src="{{image}}" loading="lazy" width="200">
-                    <p>{{content}}</p>
-                </article>
-                <!--Bootstrap: class-->
-            </div>
-
-        </section>
-        <section class="container-fluid">
-            <div class="pagination-container" data-target="users-container">
-                <button data-action="prev">Previous</button>
-                <span data-action="info"></span>
-                <button data-action="next">Next</button>
-            </div>
-            <div class="row" id="users-container" data-section="https://jsonplaceholder.org/users" data-limit="5" data-order="asc" data-by="id">
-            <!--Bootstrap: class-->
-                <article class="col-md-6">
-                    <h2>{{name}}</h2>
-                    <p>{{username}}</p>
-                    <p>{{email}}</p>
-                    <p>{{phone}}</p>
-                    <p>{{website}}</p>
-                    <p>{{address.street}}</p>
-                    <p>{{address.suite}}</p>
-                    <p>{{address.city}}</p>
-                    <p>{{address.zipcode}}</p>
-                    <p>{{company.name}}</p>
-                    <p>{{company.catchPhrase}}</p>
-                    <p>{{company.bs}}</p>
-                </article>
-                <!--Bootstrap: class-->
-            </div>
-        </section>
-    </main>
-    <script src="../main/sectionjs.js"></script>
-</body>
-</html>
+<div id="mySection" data-section="https://api.example.com/data"></div>
+<script>
+  SectionJS.initAll();
+</script>
 ```
-## Atributos `data-*`
 
-| Atributo           | Descripción                                                                 | Valores posibles                     | Opcional |
-|--------------------|-----------------------------------------------------------------------------|--------------------------------------|----------|
-| `data-section`     | La URL de la fuente de datos.                                               | Cualquier URL válida.                | No       |
-| `data-limit`       | El número de artículos por página.                                          | Número entero positivo.              | No       |
-| `data-order`       | El orden de clasificación de los datos.                                     | `ASC` (ascendente) o `DESC` (descendente). | No       |
-| `data-by`          | El campo por el cual ordenar los datos.                                     | Nombre del campo.                    | No       |
-| `data-start`       | El índice de inicio para los datos.                                         | Número entero positivo.              | No       |
-| `data-total`       | El número total de artículos.                                               | Número entero positivo.              | Sí       |
-| `data-default-page`| La página inicial a mostrar.                                                | Número entero positivo.              | Sí       |
-| `data-local-order` | Ordena los datos localmente en el navegador.                                | `asc` (ascendente) o `desc` (descendente). | Sí       |
+### Ejemplo 2: Cambiar un Atributo Dinámicamente
 
-## Atributos de paginación
+```javascript
+SectionJS.apply('mySection', 'data-limit', 10);
+```
 
-| Atributo      | Descripción                                                                 | Valores posibles                     |
-|---------------|-----------------------------------------------------------------------------|--------------------------------------|
-| `data-target` | El `id` del contenedor de artículos que se paginará.                        | `id` del contenedor de artículos.    |
-| `data-action` | La acción que realizará el botón de paginación.                             | `prev`, `next`, o `info`.            |
+### Ejemplo 3: Escuchar Eventos
 
-### Explicación:
+```javascript
+document.getElementById('mySection').addEventListener('sectionjs:rendered', (event) => {
+  console.log('Sección renderizada:', event.detail.pageData);
+});
+```
 
-- **`data-target`**: Este atributo se utiliza en el contenedor de paginación para especificar a qué contenedor de artículos se aplicará la paginación. El valor de este atributo debe coincidir con el `id` del contenedor de artículos.
-- **`data-action`**: Este atributo se utiliza en los botones de paginación para indicar qué acción realizarán. Los valores posibles son:
-  - `prev`: Para el botón que muestra la página anterior.
-  - `next`: Para el botón que muestra la página siguiente.
-  - `info`: Para el elemento que muestra la información de la página actual (por ejemplo, "Página 2 de 5").
+---
 
-## Uso en producción
+## Consideraciones
 
-Para usar la librería en producción, se recomienda compilar los archivos minificados utilizando el ya mencionado `npm run build` comando.
+- **Compatibilidad**: Asegúrate de que tu navegador soporte `MutationObserver` y `fetch`.
+- **Rendimiento**: Evita cambios frecuentes en los atributos del contenedor para optimizar el rendimiento.
+- **Manejo de Errores**: Implementa manejo de errores personalizado si es necesario.
 
+---
 
-Los archivos minificados se encontrarán en la carpeta `dist/`. Puedes elegir entre `sectionjs-latest.min.js` (para navegadores modernos) o `sectionjs-legacy.min.js` (para navegadores antiguos).
-
-## Compatibilidad con navegadores modernos
-
-SectionJS latest es compatible con la mayoría de los navegadores modernos:
-
-* **Firefox 52+**
-* **Safari 10.1+**
-* **Edge 15+**
-* **Chrome 55+**
-
-Si necesitas compatibilidad con navegadores antiguos, puedes utilizar la versión "legacy" de SectionJS, que se genera utilizando Babel y Webpack para asegurar la compatibilidad con navegadores más antiguos.
-
-## Licencia
-
-SecciónJS está licenciada bajo la [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html).
-
-## Contribución
-
-¡Las contribuciones son bienvenidas! Si encuentras un error o tienes una sugerencia, por favor abre un issue o envía un pull request.
-
-## Autor
-
-Ronaldo Jose Rodriguez Urbaneja
-
-## Enlaces
-
-  * [Repositorio de GitHub](https://github.com/RonaldoRodriguez/seccionjs)
-  * [Página de demostración](https://ronaldorodriguez.github.io/sectionjs/)
+Esta documentación proporciona una visión general de la clase `SectionJS`. Para más detalles, consulta el código fuente y los comentarios incluidos en él.
