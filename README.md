@@ -1,3 +1,4 @@
+![logo de SectionJS](logo.png)
 # Documentación de la Clase `SectionJS`
 
 La clase `SectionJS` es una herramienta diseñada para gestionar y renderizar secciones dinámicas en una página web. Permite cargar datos desde una fuente externa, paginar los datos, y actualizar la interfaz de usuario en función de los cambios en los atributos del contenedor. A continuación se detalla la funcionalidad y uso de esta clase.
