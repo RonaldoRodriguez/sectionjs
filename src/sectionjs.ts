@@ -32,11 +32,17 @@ class SectionJS {
     // Número total de elementos
     private total: number | null;
 
+    // Total de datos cargados
+    public dataTotal: number = 0;
+
     // Página por defecto al cargar la sección
     private defaultPage: number;
 
     // Página actual
     private currentPage: number;
+
+    // Última página calculada
+    public lastPage: number = 0;
 
     // Datos cargados desde la fuente
     private data: any[] | null = null;
@@ -553,6 +559,8 @@ class SectionJS {
 
         const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
         this.currentPage = Math.min(this.currentPage, totalPages);
+        this.lastPage = totalPages;
+        this.dataTotal = this.data?.length || 0;
 
         // Verificar si los artículos ya están renderizados
         const hasRenderedArticles = this.articleContainer.hasAttribute('data-section-rendered');
