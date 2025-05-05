@@ -93,13 +93,19 @@ class SectionJS {
         this.articleContainer = articleContainer;
 
         // Inicializar elementos "info" y guardar sus plantillas
-        this.spanElements = [
+        /*this.spanElements = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-action="info"], [data-section-action="info"]')),
             ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="info"], [data-target="${this.articleContainer.id}"][data-section-action="info"]`)),
             ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"]`)).flatMap(container =>
                 Array.from(container.querySelectorAll('[data-action="info"], [data-section-action="info"]'))
             )
-        ];
+        ];*/
+
+        this.spanElements = [
+            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="info"]')),
+            // Elementos dentro de contenedores externos con data-target
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="info"]`))
+        ].filter(element => element !== null) as HTMLElement[];
 
         // Guardar una copia de cada elemento "info" como plantilla
         this.infoTemplates = this.spanElements.map(element => element.cloneNode(true) as Element);
@@ -356,12 +362,14 @@ class SectionJS {
         // Seleccionar botones dentro de contenedores estáticos o fuera del contenedor principal
         const prevButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="prev"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="prev"]`))
+            // Botones dentro de contenedores externos con data-target
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="prev"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
-
+        
         const nextButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="next"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="next"]`))
+            // Botones dentro de contenedores externos con data-target
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="next"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
 
         // Asignar eventos a los botones
@@ -444,7 +452,8 @@ class SectionJS {
         // Seleccionar elementos "info" dentro de contenedores estáticos o fuera del contenedor principal
         const infoElements = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="info"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="info"]`))
+            // Elementos dentro de contenedores externos con data-target
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="info"]`))
         ].filter(element => element !== null) as HTMLElement[];
 
         // Actualizar el contenido de los elementos "info" usando sus propias plantillas
@@ -474,12 +483,14 @@ class SectionJS {
         // Seleccionar botones dentro de contenedores estáticos o fuera del contenedor principal
         const prevButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="prev"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="prev"]`))
+            // Botones dentro de contenedores externos con data-target
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="prev"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
-
+        
         const nextButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="next"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="next"]`))
+            // Botones dentro de contenedores externos con data-target
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="next"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
 
         // Actualizar el estado de los botones
