@@ -1,3 +1,12 @@
+interface GetDataEventDetail {
+    key: string;
+    query?: any;
+}
+
+interface DataResponseEventDetail<T> {
+    data: T;
+}
+
 class SectionJS {
     // Lista de todas las instancias de SectionJS creadas
     public static instances: SectionJS[] = [];
@@ -195,29 +204,46 @@ class SectionJS {
      */
     private async load(): Promise<any> {
         if (!this.dataSourceURL) return null;
+    
         try {
-            const response = await fetch(this.dataSourceURL);
-            if (!response.ok) throw new Error(`Error: ${response.status}`);
-            const contentType = response.headers.get("Content-Type");
-
-            if (contentType?.includes("application/json")) {
-                const fullJsonData = await response.json();
-                let filteredJsonData = this.responsePath ? this.getValue(fullJsonData, this.responsePath) : fullJsonData;
-                this.data = Array.isArray(filteredJsonData) ? filteredJsonData : [filteredJsonData];
+            // Si es un JSON inline (comienza con [ o {)
+            if (this.dataSourceURL.trim().startsWith('[') || this.dataSourceURL.trim().startsWith('{')) {
+                const inlineData = JSON.parse(this.dataSourceURL);
+                this.data = Array.isArray(inlineData) ? inlineData : [inlineData];
                 this.articleContainer.dispatchEvent(new CustomEvent('sectionjs:datachanged', { detail: { data: this.data } }));
-                return fullJsonData;
-            } else {
-                const textData = await response.text();
-                this.data = [textData];
-                return textData;
+                return inlineData;
+            }
+            // Si es una URL
+            else {
+                const response = await fetch(this.dataSourceURL);
+                if (!response.ok) throw new Error(`Error: ${response.status}`);
+                const contentType = response.headers.get("Content-Type");
+    
+                if (contentType?.includes("application/json")) {
+                    const fullJsonData = await response.json();
+                    let filteredJsonData = this.responsePath ? this.getValue(fullJsonData, this.responsePath) : fullJsonData;
+                    this.data = Array.isArray(filteredJsonData) ? filteredJsonData : [filteredJsonData];
+                    this.articleContainer.dispatchEvent(new CustomEvent('sectionjs:datachanged', { detail: { data: this.data } }));
+                    return fullJsonData;
+                } else {
+                    const textData = await response.text();
+                    this.data = [textData];
+                    return textData;
+                }
             }
         } catch (error) {
-            console.error(error);
-            this.articleContainer.innerHTML = "<p>Error al cargar datos.</p>";
+            this.articleContainer.dispatchEvent(
+                new CustomEvent('sectionjs:error', {
+                    detail: {
+                        error: error,
+                        message: "Error al cargar datos",
+                        sectionId: this.articleContainer.id
+                    }
+                })
+            );
             throw error;
         }
     }
-
     /**
      * Busca un valor específico en los datos cargados.
      * @param fullData Datos completos (opcional, si no se proporciona, se cargan automáticamente).
@@ -418,7 +444,9 @@ class SectionJS {
      * @returns Texto con las variables reemplazadas.
      */
     private replaceText(text: string, data: any): string {
-        return text.replace(/{{(.*?)}}/g, (_, clave) => this.getValue(data, clave) || '');
+        return text.replace(/{{\s*([^}]+?)\s*}}/g, (_, clave) => {
+            return this.getValue(data, clave.trim()) || '';
+        });
     }
 
     /**
@@ -449,26 +477,29 @@ class SectionJS {
         const lastItemIndex = Math.min(firstItemIndex + (this.limit || 0) - 1, itemsTotal);
         this.lastItemIndex = lastItemIndex;
 
-        // Seleccionar elementos "info" dentro de contenedores estáticos o fuera del contenedor principal
+        // Crear objeto con todas las variables necesarias
+        const infoVariables = {
+            currentPage: this.currentPage,
+            totalPages: Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1)),
+            itemsNow: this.getPage(this.currentPage).length,
+            itemsTotal: this.data?.length || 0,
+            firstItemIndex: (this.currentPage - 1) * (this.limit || 0) + 1,
+            lastItemIndex: Math.min((this.currentPage - 1) * (this.limit || 0) + (this.limit || 0), this.data?.length || 0),
+            dataTotal: this.dataTotal // ¡Clave faltante!
+        };
+
+        // Seleccionar elementos "info"
         const infoElements = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="info"]')),
-            // Elementos dentro de contenedores externos con data-target
             ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="info"]`))
         ].filter(element => element !== null) as HTMLElement[];
 
         // Actualizar el contenido de los elementos "info" usando sus propias plantillas
-        infoElements.forEach((infoElement: HTMLElement, index) => {
-            const templateElement = this.infoTemplates ? this.infoTemplates[index] : null;
-            const template = templateElement ? templateElement.textContent : null;
-            if (template) {
-                infoElement.textContent = template
-                    .replace('{{currentPage}}', this.currentPage.toString())
-                    .replace('{{totalPages}}', totalPages.toString())
-                    .replace('{{itemsNow}}', itemsNow.toString())
-                    .replace('{{itemsTotal}}', itemsTotal.toString())
-                    .replace('{{firstItemIndex}}', firstItemIndex.toString())
-                    .replace('{{lastItemIndex}}', lastItemIndex.toString());
-            }
+        // En el método updateInfo(), modifica esta parte:
+        // Actualizar usando replaceText para manejar espacios
+        infoElements.forEach((infoElement, index) => {
+            const template = this.infoTemplates![index].textContent || '';
+            infoElement.textContent = this.replaceText(template, infoVariables);
         });
     }
 
@@ -561,12 +592,15 @@ class SectionJS {
      * Agrega un listener para el evento 'sectionjs:getdata'.
      */
     private addListener(): void {
-        if (!this.articleContainer) return;
         this.articleContainer.addEventListener('sectionjs:getdata', (event: Event) => {
-            const customEvent = event as CustomEvent;
-            const data = customEvent.detail.data;
-            const value = data && this.data ? this.getValue(this.data, data) : this.data;
-            this.articleContainer.dispatchEvent(new CustomEvent(`sectionjs:getdata:${data || 'all'}`, { detail: { value } }));
+            const customEvent = event as CustomEvent<{ key: string; query?: any }>;
+            const key = customEvent.detail.key;
+            
+            this.articleContainer.dispatchEvent(
+                new CustomEvent(`sectionjs:getdata:${key}`, {
+                    detail: customEvent.detail // Pasa todo el detalle
+                })
+            );
         });
     }
 
@@ -671,22 +705,148 @@ class SectionJS {
         }
     }
 
-        public async isRendered(callback: (section: SectionJS) => void): Promise<void> {
-            this.articleContainer.addEventListener("sectionjs:rendered", async (e: Event) => {
-            //const customEvent = e as CustomEvent<{ pageData: any[] }>;
+    /**
+     * Escucha cuando la sección termina de renderizar.
+     * @param callback Función que recibe la instancia de SectionJS.
+     */
+    public onRendered(callback: (section: SectionJS) => void): void {
+        this.articleContainer.addEventListener('sectionjs:rendered', (e: Event) => {
             callback(this);
-            });
+        });
+    }
+            /**
+     * Escucha cuando los datos de la sección cambian.
+            * @param callback Función que recibe los nuevos datos.
+            */
+           public onDataChanged(callback: (data: any[]) => void): void {
+               this.articleContainer.addEventListener('sectionjs:datachanged', (e: Event) => {
+                   const customEvent = e as CustomEvent<{ data: any[] }>;
+                   callback(customEvent.detail.data);
+               });
+           }
+       
+           /**
+            * Escucha cuando ocurre un error en la sección.
+            * @param callback Función que recibe el error y mensaje.
+            */
+           public onError(callback: (error: Error, message: string) => void): void {
+               this.articleContainer.addEventListener('sectionjs:error', (e: Event) => {
+                   const customEvent = e as CustomEvent<{ error: Error, message: string }>;
+                   callback(customEvent.detail.error, customEvent.detail.message);
+               });
+           }
+       
+           /**
+            * Escucha cuando se solicita datos específicos (getdata).
+            * @param callback Función que maneja la solicitud.
+            */
+           public onGetData(callback: (dataKey: string) => void): void {
+               this.articleContainer.addEventListener('sectionjs:getdata', (e: Event) => {
+                   const customEvent = e as CustomEvent<{ data: string }>;
+                   callback(customEvent.detail.data);
+               });
+           }
+           
+           
+ /**
+     * Escucha solicitudes de datos específicos y permite responder.
+     * @param key Clave de datos a escuchar (ej: 'user.email').
+     * @param callback Función que retorna el valor solicitado.
+     */
+ public onDataRequest<T>(key: string, handler: (query?: any) => T | Promise<T>): void {
+    this.articleContainer.addEventListener(
+        `sectionjs:getdata:${key}`,
+        async (e: Event) => {
+            const customEvent = e as CustomEvent<{ key: string; query?: any }>;
+            try {
+                const result = await handler(customEvent.detail.query);
+                this.articleContainer.dispatchEvent(
+                    new CustomEvent(`sectionjs:dataresponse:${key}`, {
+                        detail: result
+                    })
+                );
+            } catch (error) {
+                this.articleContainer.dispatchEvent(
+                    new CustomEvent(`sectionjs:dataerror:${key}`, {
+                        detail: error
+                    })
+                );
+            }
         }
-
-        // crear Funcion para detener initAll() si se a inicializado, y limpiar las instancias
-        public static stopAll(): null | HTMLElement {
-            const a: HTMLElement | null = document.querySelector("body[data-section-stop]")
-            if(a) SectionJS.instances = [];
-            return a;
-        }
+    );
 }
-// agregar una funcion que detecte cuando este cargado el DOM, usando DOMContentLoaded
 
-document.addEventListener('DOMContentLoaded', () => {
-    SectionJS.stopAll() ?? SectionJS.initAll();
-});
+
+/**
+ * Solicita datos y espera respuesta (similar a fetch()).
+ * @param key Clave de datos a solicitar.
+ * @param query Parámetros opcionales.
+ * @returns Promise con el resultado.
+ */
+public async requestData<T>(key: string, query?: any, timeout: number = 5000): Promise<T> {
+    return new Promise((resolve, reject) => {
+        // Controlar timeout
+        const timeoutId = setTimeout(() => {
+            reject(new Error(`Solicitud '${key}' excedió el tiempo de espera (${timeout}ms)`));
+            this.articleContainer.removeEventListener(
+                `sectionjs:dataresponse:${key}`, 
+                responseListener as EventListenerOrEventListenerObject
+            );
+        }, timeout);
+
+        // Listener para la respuesta
+        const responseListener = (e: CustomEvent) => {
+            clearTimeout(timeoutId);
+            resolve(e.detail);
+            this.articleContainer.removeEventListener(
+                `sectionjs:dataresponse:${key}`, 
+                responseListener as EventListenerOrEventListenerObject
+            );
+        };
+
+        // Registrar listener
+        this.articleContainer.addEventListener(
+            `sectionjs:dataresponse:${key}`, 
+            responseListener as EventListenerOrEventListenerObject
+        );
+
+        // Disparar evento de solicitud
+        this.articleContainer.dispatchEvent(
+            new CustomEvent('sectionjs:getdata', {
+                detail: {
+                    key: key,
+                    query: query
+                }
+            })
+        );
+    });
+}
+        
+    /**
+     * Destruye todas las instancias de SectionJS y limpia los recursos.
+     * Ideal para reinicios completos o pruebas.
+     */
+    public static stopAll(): void {
+        SectionJS.instances.forEach(instance => {
+              // Eliminar todos los listeners de eventos personalizados
+            instance.articleContainer.replaceWith(instance.articleContainer.cloneNode(true));
+       
+            // Limpiar observador de mutaciones
+            if (instance.observer) {
+                instance.observer.disconnect();
+                instance.observer = null;
+            }
+            
+            // Eliminar eventos personalizados
+            instance.articleContainer.removeAttribute('data-section-rendered');
+            instance.articleContainer.innerHTML = '';
+            
+            // Limpiar referencias
+            instance.articleTemplate = null;
+            instance.infoTemplates = null;
+            instance.data = null;
+        });
+        
+        SectionJS.instances = []; // Vaciar array de instancias
+    }
+}
