@@ -35,8 +35,23 @@ class SectionJS {
     // Total de datos cargados
     public dataTotal: number = 0;
 
+    // Total de páginas calculadas
+    public totalPages: number = 0;
+
+    // Total de elementos
+    public itemsTotal: number = 0;
+
+    // Número de elementos en la página actual
+    public itemsNow: number = 0;
+
     // Página por defecto al cargar la sección
     private defaultPage: number;
+
+    // Índice del primer elemento en la página actual
+    public firstItemIndex: number = 0;
+
+    // Índice del último elemento en la página actual
+    public lastItemIndex: number = 0;
 
     // Página actual
     private currentPage: number;
@@ -408,10 +423,16 @@ class SectionJS {
         if (!this.articleContainer || !this.spanElements.length || !(this.infoTemplates as Element[]).length) return;
 
         const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
+        this.totalPages = totalPages;
         const itemsTotal = this.data?.length || 0;
+        this.itemsTotal = itemsTotal;
         const itemsNow = this.getPage(this.currentPage).length;
+        this.itemsNow = itemsNow;
+
         const firstItemIndex = (this.currentPage - 1) * (this.limit || 0) + 1;
+        this.firstItemIndex = firstItemIndex;
         const lastItemIndex = Math.min(firstItemIndex + (this.limit || 0) - 1, itemsTotal);
+        this.lastItemIndex = lastItemIndex;
 
         // Seleccionar elementos "info" dentro de contenedores estáticos o fuera del contenedor principal
         const infoElements = [
@@ -425,7 +446,7 @@ class SectionJS {
             const template = templateElement ? templateElement.textContent : null;
             if (template) {
                 infoElement.textContent = template
-                    .replace('{{pageNow}}', this.currentPage.toString())
+                    .replace('{{currentPage}}', this.currentPage.toString())
                     .replace('{{totalPages}}', totalPages.toString())
                     .replace('{{itemsNow}}', itemsNow.toString())
                     .replace('{{itemsTotal}}', itemsTotal.toString())
@@ -627,4 +648,11 @@ class SectionJS {
             this.enableObserver(); // Reactivar el Observer solo si estaba activo
         }
     }
+
+        public async isRendered(callback: (containerId: string, pageData: any[]) => void): Promise<void> {
+            this.articleContainer.addEventListener("sectionjs:rendered", async (e: Event) => {
+            const customEvent = e as CustomEvent<{ pageData: any[] }>;
+            callback(this.articleContainer.id, customEvent.detail.pageData);
+            });
+        }
 }
