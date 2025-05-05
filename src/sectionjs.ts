@@ -5,6 +5,9 @@ class SectionJS {
     // Contenedor HTML donde se renderizarán los datos
     private articleContainer: HTMLElement;
 
+    // Nombre del contenedor
+    public name : string | null = null;
+
     // Plantilla para renderizar cada artículo
     private articleTemplate: Element | null = null;
 
@@ -13,6 +16,9 @@ class SectionJS {
 
     // Elementos que muestran información adicional (paginación, etc.)
     private spanElements: Element[];
+
+    // Indica si el contenedor está renderizado
+    public static default: boolean = false;
 
     // URL de la fuente de datos
     private dataSourceURL: string | null;
@@ -109,6 +115,7 @@ class SectionJS {
         this.currentPage = this.defaultPage;
         this.responsePath = articleContainer.getAttribute('data-response-path');
         this.findKey = articleContainer.getAttribute('data-find');
+        this.name = this.articleContainer.id
 
         // No activar el Observer por defecto
     }
@@ -568,12 +575,15 @@ class SectionJS {
             SectionJS.instances.push(section);
             await section.initSelf(); // Inicializar cada instancia individualmente
         }
+        
+        SectionJS.default = true;
     }
 
     /**
      * Inicializa la instancia actual de SectionJS.
      */
     public async initSelf(): Promise<void> {
+        //if (!this.articleContainer) return;
         this.addListener();
         await this.load();
         await this.findKeyValue();
@@ -596,6 +606,7 @@ class SectionJS {
 
         if (prevButton) prevButton.onclick = () => this.paginate('prev');
         if (nextButton) nextButton.onclick = () => this.paginate('next');
+
     }
 
     /**
@@ -649,10 +660,22 @@ class SectionJS {
         }
     }
 
-        public async isRendered(callback: (containerId: string, pageData: any[]) => void): Promise<void> {
+        public async isRendered(callback: (section: SectionJS) => void): Promise<void> {
             this.articleContainer.addEventListener("sectionjs:rendered", async (e: Event) => {
-            const customEvent = e as CustomEvent<{ pageData: any[] }>;
-            callback(this.articleContainer.id, customEvent.detail.pageData);
+            //const customEvent = e as CustomEvent<{ pageData: any[] }>;
+            callback(this);
             });
         }
+
+        // crear Funcion para detener initAll() si se a inicializado, y limpiar las instancias
+        public static stopAll(): null | HTMLElement {
+            const a: HTMLElement | null = document.querySelector("body[data-section-stop]")
+            if(a) SectionJS.instances = [];
+            return a;
+        }
 }
+// agregar una funcion que detecte cuando este cargado el DOM, usando DOMContentLoaded
+
+document.addEventListener('DOMContentLoaded', () => {
+    SectionJS.stopAll() ?? SectionJS.initAll();
+});
