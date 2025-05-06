@@ -1,23 +1,29 @@
-interface GetDataEventDetail {
+interface BaseEventDetail {
+    sectionId: string;
+    timestamp: number;
+}
+
+interface GetDataEventDetail extends BaseEventDetail {
     key: string;
     query?: any;
 }
 
-interface DataResponseEventDetail<T> {
+interface DataResponseEventDetail<T> extends BaseEventDetail {
     data: T;
 }
 
-interface RenderEventDetail {
+interface RenderEventDetail extends BaseEventDetail {
     pageData: any[];
     renderedElements: Element[];
     templateUsed: Element;
 }
 
-interface ErrorEventDetail {
-    error: Error;
+interface ErrorEventDetail extends BaseEventDetail {
+    error: unknown;
     message: string;
-    sectionId: string;
+    stack?: string;
 }
+
 
 class SectionJS {
     
@@ -660,114 +666,130 @@ class SectionJS {
             this.enableObserver();
         }
     }
-/**
-     * Escucha solicitudes de datos específicos y permite responder.
-     * @param key Clave de datos a escuchar (ej: 'user.email').
-     * @param callback Función que retorna el valor solicitado.
-     */
-public onDataRequest<T>(key: string, handler: (query?: any) => T | Promise<T>): void {
-    this.articleContainer.addEventListener(
-        `sectionjs:getdata:${key}`,
-        async (e: Event) => {
-            const customEvent = e as CustomEvent<{ key: string; query?: any }>;
-            try {
-                const result = await handler(customEvent.detail.query);
-                this.articleContainer.dispatchEvent(
-                    new CustomEvent(`sectionjs:dataresponse:${key}`, {
-                        detail: result
-                    })
-                );
-            } catch (error) {
-                this.articleContainer.dispatchEvent(
-                    new CustomEvent(`sectionjs:dataerror:${key}`, {
-                        detail: error
-                    })
-                );
-            }
-        }
-    );
-}
-
-
-/**
- * Solicita datos y espera respuesta (similar a fetch()).
- * @param key Clave de datos a solicitar.
- * @param query Parámetros opcionales.
- * @returns Promise con el resultado.
- */
-public async requestData<T>(key: string, query?: any, timeout: number = 5000): Promise<T> {
-    return new Promise((resolve, reject) => {
-        // Controlar timeout
-        const timeoutId = setTimeout(() => {
-            reject(new Error(`Solicitud '${key}' excedió el tiempo de espera (${timeout}ms)`));
-            this.articleContainer.removeEventListener(
-                `sectionjs:dataresponse:${key}`, 
-                responseListener as EventListenerOrEventListenerObject
-            );
-        }, timeout);
-
-        // Listener para la respuesta
-        const responseListener = (e: CustomEvent) => {
-            clearTimeout(timeoutId);
-            resolve(e.detail);
-            this.articleContainer.removeEventListener(
-                `sectionjs:dataresponse:${key}`, 
-                responseListener as EventListenerOrEventListenerObject
-            );
-        };
-
-        // Registrar listener
-        this.articleContainer.addEventListener(
-            `sectionjs:dataresponse:${key}`, 
-            responseListener as EventListenerOrEventListenerObject
-        );
-
-        // Disparar evento de solicitud
-        this.articleContainer.dispatchEvent(
-            new CustomEvent('sectionjs:getdata', {
-                detail: {
-                    key: key,
-                    query: query
-                }
-            })
-        );
-    });
-}
-        
-
     
     /**
-    * Escucha cuando se solicita datos específicos (getdata).
-    * @param callback Función que maneja la solicitud.
-    */
-    public onGetData(callback: (dataKey: string) => void): void {
-        this.articleContainer.addEventListener('sectionjs:getdata', (e: Event) => {
-        const customEvent = e as CustomEvent<{ data: string }>;
+     * Escucha solicitudes de datos específicos y permite responder.
+     */
+    public onDataRequest<T>(key: string, handler: (query?: any) => T | Promise<T>): void {
+        this.articleContainer.addEventListener(
+            `sectionjs:getdata:${key}`,
+            async (e: Event) => {
+                const customEvent = e as CustomEvent<GetDataEventDetail>;
+                try {
+                    const result = await handler(customEvent.detail.query);
+                    this.articleContainer.dispatchEvent(
+                        new CustomEvent(`sectionjs:dataresponse:${key}`, {
+                            detail: {
+                                data: result,
+                                sectionId: this.name || '',
+                                timestamp: Date.now()
+                            } as DataResponseEventDetail<T>
+                        })
+                    );
+                } catch (error) {
+                    this.articleContainer.dispatchEvent(
+                        new CustomEvent(`sectionjs:dataerror:${key}`, {
+                            detail: {
+                                error: error instanceof Error ? error : new Error(String(error)),
+                                message: "Error en solicitud de datos",
+                                sectionId: this.name || '',
+                                timestamp: Date.now()
+                            } as ErrorEventDetail
+                        })
+                    );
+                }
+            }
+        );
+    }
+
+    /**
+     * Solicita datos y espera respuesta (similar a fetch()).
+     */
+    public async requestData<T>(key: string, query?: any, timeout: number = 5000): Promise<T> {
+        return new Promise((resolve, reject) => {
+            const controller = new AbortController();
+            const timestamp = Date.now();
+
+            const responseListener = (e: Event) => {
+                const customEvent = e as CustomEvent<DataResponseEventDetail<T>>;
+                clearTimeout(timeoutId);
+                resolve(customEvent.detail.data);
+                controller.abort();
+            };
+
+            const errorListener = (e: Event) => {
+                const customEvent = e as CustomEvent<ErrorEventDetail>;
+                clearTimeout(timeoutId);
+                reject(customEvent.detail.error);
+                controller.abort();
+            };
+
+            const timeoutId = setTimeout(() => {
+                reject(new Error(`Solicitud '${key}' excedió el tiempo de espera (${timeout}ms)`));
+                controller.abort();
+            }, timeout);
+
+            this.articleContainer.addEventListener(
+                `sectionjs:dataresponse:${key}`,
+                responseListener,
+                { signal: controller.signal }
+            );
+            
+            this.articleContainer.addEventListener(
+                `sectionjs:dataerror:${key}`,
+                errorListener,
+                { signal: controller.signal }
+            );
+
+            this.articleContainer.dispatchEvent(
+                new CustomEvent(`sectionjs:getdata:${key}`, {
+                    detail: {
+                        key,
+                        query,
+                        sectionId: this.name || '',
+                        timestamp
+                    } as GetDataEventDetail
+                })
+            );
+        });
+    }
+
+    
+  /**
+ * Escucha cuando se solicita datos específicos (getdata).
+ * @param callback Función que maneja la solicitud.
+ */
+public onGetData(callback: (dataKey: string) => void): void {
+    this.articleContainer.addEventListener('sectionjs:getdata', (e: Event) => {
+        const customEvent = e as CustomEvent<{ key: string }>; // ← Cambio crítico en el tipado
+        callback(customEvent.detail.key); // ← Usar 'key' en lugar de 'data'
+    });
+}
+
+ // Métodos de eventos actualizados
+ public onRendered(callback: (detail: RenderEventDetail) => void): void {
+    this.articleContainer.addEventListener('sectionjs:rendered', (e: Event) => {
+        const customEvent = e as CustomEvent<RenderEventDetail>;
+        callback(customEvent.detail);
+    });
+}
+
+public onDataChanged(callback: (data: any[]) => void): void {
+    this.articleContainer.addEventListener('sectionjs:datachanged', (e: Event) => {
+        const customEvent = e as CustomEvent<DataResponseEventDetail<any[]>>;
         callback(customEvent.detail.data);
-        });
-    }
+    });
+}
 
-    public onRendered(callback: (detail: RenderEventDetail) => void): void {
-        this.articleContainer.addEventListener('sectionjs:rendered', (e: Event) => {
-            const customEvent = e as CustomEvent<RenderEventDetail>;
-            callback(customEvent.detail);
-        });
-    }
-
-    public onDataChanged(callback: (data: any[]) => void): void {
-        this.articleContainer.addEventListener('sectionjs:datachanged', (e: Event) => {
-            const customEvent = e as CustomEvent<{ data: any[] }>;
-            callback(customEvent.detail.data);
-        });
-    }
-
-    public onError(callback: (error: Error, message: string) => void): void {
-        this.articleContainer.addEventListener('sectionjs:error', (e: Event) => {
-            const customEvent = e as CustomEvent<ErrorEventDetail>;
-            callback(customEvent.detail.error, customEvent.detail.message);
-        });
-    }
-
+public onError(callback: (error: Error, message: string) => void): void {
+    this.articleContainer.addEventListener('sectionjs:error', (e: Event) => {
+        const customEvent = e as CustomEvent<ErrorEventDetail>;
+        const error = customEvent.detail.error instanceof Error 
+            ? customEvent.detail.error 
+            : new Error(String(customEvent.detail.error));
+        callback(error, customEvent.detail.message);
+    });
+}
     public static stopAll(): void {
         SectionJS.instances.forEach(instance => {
             instance.articleContainer.replaceWith(instance.articleContainer.cloneNode(true));
