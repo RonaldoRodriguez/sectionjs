@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo SectionJS - Latest</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #444;
+        }
+        .article-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .article {
+            border-bottom: 1px solid #eee;
+            padding: 15px 0;
+        }
+        .article:last-child {
+            border-bottom: none;
+        }
+        .article h2 {
+            margin: 0;
+            font-size: 1.5em;
+            color: #007BFF;
+        }
+        .article p {
+            margin: 10px 0 0;
+            color: #666;
+        }
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            padding: 10px 20px;
+            font-size: 1em;
+            color: #fff;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .pagination button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .pagination span {
+            font-size: 1em;
+            color: #555;
+        }
+        .error-message {
+            color: #dc3545;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+  <div class="article-container">
+    <h1>Demo SectionJS - Latest</h1>
+    <p style="text-align: center;">Esta es una demostración de la versión más reciente de SectionJS, diseñada para navegadores modernos.</p>
+
+    <!-- Contenedor de artículos -->
+    <div id="my-article-container" 
+         data-section="https://jsonplaceholder.typicode.com/posts" 
+         data-limit="5" 
+         data-order="ASC">
+          <div data-section-static>
+            <div class="pagination">
+                <button data-action="prev">Anterior</button>
+                <span data-action="info"> <span data-action="info">Página {{currentPage}} de {{totalPages}}</span>
+                <span data-action="info">(Mostrando {{itemsNow}} de {{itemsTotal}} artículos)</span></span>
+                <button data-action="next">Siguiente</button>
+            </div>
+        </div>
+        <!-- Plantilla para renderizar artículos -->
+        <div data-section-render>
+            <div class="article">
+                <h2>{{title}}</h2>
+                <p>{{body}}</p>
+            </div>
+        </div>
+
+        <!-- Contenedor estático para botones de paginación e información -->
+        <div data-section-static>
+            <div class="pagination">
+                <button data-action="prev">Anterior</button>
+                <span data-action="info">Página {{currentPage}} de {{totalPages}}</span>
+                <button data-action="next">Siguiente</button>
+            </div>
+        </div>
+
+        <!-- Mensaje de error -->
+        <div class="error-message" style="display: none;">
+            Error al cargar los datos. Por favor, inténtalo de nuevo más tarde.
+        </div>
+    </div>
+
+  </div>
+    <!-- Incluir SectionJS -->
+    <script src="../dist/sectionjs.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Obtener el contenedor de artículos
+            const container = document.getElementById('my-article-container');
+
+            // Crear una instancia de SectionJS
+            const sectionInstance = new SectionJS(container);
+
+            // Inicializar SectionJS
+            sectionInstance.initSelf();
+
+            // Manejar errores
+            container.addEventListener('sectionjs:error', function (event) {
+                const errorMessage = container.querySelector('.error-message');
+                if (errorMessage) {
+                    errorMessage.style.display = 'block';
+                }
+                console.error('Error en SectionJS:', event.detail.error);
+            });
+
+            // Manejar cambios en los datos
+            container.addEventListener('sectionjs:datachanged', function (event) {
+                console.log('Datos cargados:', event.detail.data);
+            });
+
+            // Manejar eventos de renderizado
+            container.addEventListener('sectionjs:rendered', function (event) {
+                console.log('Artículos renderizados:', event.detail.pageData);
+            });
+        });
+    </script>
+</body>
+</html>
