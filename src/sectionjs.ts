@@ -7,87 +7,48 @@ interface DataResponseEventDetail<T> {
     data: T;
 }
 
+interface RenderEventDetail {
+    pageData: any[];
+    renderedElements: Element[];
+    templateUsed: Element;
+}
+
+interface ErrorEventDetail {
+    error: Error;
+    message: string;
+    sectionId: string;
+}
+
 class SectionJS {
-    // Lista de todas las instancias de SectionJS creadas
+    
     public static instances: SectionJS[] = [];
-
-    // Contenedor HTML donde se renderizarán los datos
     private articleContainer: HTMLElement;
-
-    // Nombre del contenedor
-    public name : string | null = null;
-
-    // Plantilla para renderizar cada artículo
+    public name: string | null = null;
     private articleTemplate: Element | null = null;
-
-    // Plantillas para los elementos de información (paginación, etc.)
     private infoTemplates: Element[] | null = null;
-
-    // Elementos que muestran información adicional (paginación, etc.)
     private spanElements: Element[];
-
-    // Indica si el contenedor está renderizado
-    public static default: boolean = false;
-
-    // URL de la fuente de datos
     private dataSourceURL: string | null;
-
-    // Número máximo de elementos por página
     private limit: number | null;
-
-    // Orden de los datos (ASC o DESC)
     private order: string;
-
-    // Índice de inicio para la paginación
     private start: number;
-
-    // Atributo por el cual ordenar los datos
     private orderBy: string | null;
-
-    // Número total de elementos
     private total: number | null;
-
-    // Total de datos cargados
     public dataTotal: number = 0;
-
-    // Total de páginas calculadas
     public totalPages: number = 0;
-
-    // Total de elementos
     public itemsTotal: number = 0;
-
-    // Número de elementos en la página actual
     public itemsNow: number = 0;
-
-    // Página por defecto al cargar la sección
     private defaultPage: number;
-
-    // Índice del primer elemento en la página actual
     public firstItemIndex: number = 0;
-
-    // Índice del último elemento en la página actual
     public lastItemIndex: number = 0;
-
-    // Página actual
     private currentPage: number;
-
-    // Última página calculada
     public lastPage: number = 0;
-
-    // Datos cargados desde la fuente
     private data: any[] | null = null;
-
-    // Ruta dentro del JSON de respuesta para obtener los datos
     private responsePath: string | null;
-
-    // Clave para buscar un valor específico en los datos
     private findKey: string | null;
-
-    // Observador de cambios en los atributos del contenedor
     private observer: MutationObserver | null = null;
-
-    // Indica si el observador está activo
     private observerActive: boolean = false;
+    private create_id: string[] = [];
+
 
     /**
      * Constructor de la clase SectionJS.
@@ -102,19 +63,13 @@ class SectionJS {
         this.articleContainer = articleContainer;
 
         // Inicializar elementos "info" y guardar sus plantillas
-        /*this.spanElements = [
+        this.spanElements = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-action="info"], [data-section-action="info"]')),
             ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="info"], [data-target="${this.articleContainer.id}"][data-section-action="info"]`)),
             ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"]`)).flatMap(container =>
                 Array.from(container.querySelectorAll('[data-action="info"], [data-section-action="info"]'))
             )
-        ];*/
-
-        this.spanElements = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="info"]')),
-            // Elementos dentro de contenedores externos con data-target
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="info"]`))
-        ].filter(element => element !== null) as HTMLElement[];
+        ];
 
         // Guardar una copia de cada elemento "info" como plantilla
         this.infoTemplates = this.spanElements.map(element => element.cloneNode(true) as Element);
@@ -130,9 +85,23 @@ class SectionJS {
         this.currentPage = this.defaultPage;
         this.responsePath = articleContainer.getAttribute('data-response-path');
         this.findKey = articleContainer.getAttribute('data-find');
-        this.name = this.articleContainer.id
+        /*comprobar que el id exista, y si no, generar un nuevo id*/
+        this.name = articleContainer.id && articleContainer.id.trim() !== '' ? articleContainer.id : this.generateId();
 
         // No activar el Observer por defecto
+    }
+
+    public generateId() {
+        // primero, verificamos si existe o no el id, si existe generamos uno nuevo, y volvemos a comprobar,
+        // y si no existe lo agregamos al array, y lo retornamos:
+
+        let id = `section-${Math.random().toString(36).substring(2, 11)}`;
+        if (this.create_id.includes(id)) {
+            return this.generateId();
+        } else {
+            this.create_id.push(id);
+            return id;
+        }
     }
 
     /**
@@ -206,15 +175,12 @@ class SectionJS {
         if (!this.dataSourceURL) return null;
     
         try {
-            // Si es un JSON inline (comienza con [ o {)
             if (this.dataSourceURL.trim().startsWith('[') || this.dataSourceURL.trim().startsWith('{')) {
                 const inlineData = JSON.parse(this.dataSourceURL);
                 this.data = Array.isArray(inlineData) ? inlineData : [inlineData];
                 this.articleContainer.dispatchEvent(new CustomEvent('sectionjs:datachanged', { detail: { data: this.data } }));
                 return inlineData;
-            }
-            // Si es una URL
-            else {
+            } else {
                 const response = await fetch(this.dataSourceURL);
                 if (!response.ok) throw new Error(`Error: ${response.status}`);
                 const contentType = response.headers.get("Content-Type");
@@ -244,6 +210,7 @@ class SectionJS {
             throw error;
         }
     }
+
     /**
      * Busca un valor específico en los datos cargados.
      * @param fullData Datos completos (opcional, si no se proporciona, se cargan automáticamente).
@@ -375,8 +342,16 @@ class SectionJS {
         this.updateInfo();
         this.updateButtons();
 
-        // Disparar evento de renderizado
-        this.articleContainer.dispatchEvent(new CustomEvent('sectionjs:rendered', { detail: { pageData } }));
+        // Disparar evento de renderizado con los elementos correctos
+        this.articleContainer.dispatchEvent(
+            new CustomEvent('sectionjs:rendered', {
+                detail: {
+                    pageData,
+                    renderedElements: elementosOrdenados.filter(el => !el.hasAttribute('data-section-static')), // Solo elementos dinámicos
+                    templateUsed: this.articleTemplate!
+                }
+            })
+        );
     }
 
     /**
@@ -388,14 +363,12 @@ class SectionJS {
         // Seleccionar botones dentro de contenedores estáticos o fuera del contenedor principal
         const prevButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="prev"]')),
-            // Botones dentro de contenedores externos con data-target
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="prev"]`))
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="prev"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
-        
+
         const nextButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="next"]')),
-            // Botones dentro de contenedores externos con data-target
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="next"]`))
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="next"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
 
         // Asignar eventos a los botones
@@ -477,32 +450,26 @@ class SectionJS {
         const lastItemIndex = Math.min(firstItemIndex + (this.limit || 0) - 1, itemsTotal);
         this.lastItemIndex = lastItemIndex;
 
-        // Crear objeto con todas las variables necesarias
         const infoVariables = {
             currentPage: this.currentPage,
-            totalPages: Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1)),
-            itemsNow: this.getPage(this.currentPage).length,
-            itemsTotal: this.data?.length || 0,
-            firstItemIndex: (this.currentPage - 1) * (this.limit || 0) + 1,
-            lastItemIndex: Math.min((this.currentPage - 1) * (this.limit || 0) + (this.limit || 0), this.data?.length || 0),
-            dataTotal: this.dataTotal // ¡Clave faltante!
+            totalPages: totalPages,
+            itemsNow: itemsNow,
+            itemsTotal: itemsTotal,
+            firstItemIndex: firstItemIndex,
+            lastItemIndex: lastItemIndex,
+            dataTotal: this.dataTotal
         };
 
-        // Seleccionar elementos "info"
         const infoElements = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="info"]')),
             ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="info"]`))
         ].filter(element => element !== null) as HTMLElement[];
 
-        // Actualizar el contenido de los elementos "info" usando sus propias plantillas
-        // En el método updateInfo(), modifica esta parte:
-        // Actualizar usando replaceText para manejar espacios
         infoElements.forEach((infoElement, index) => {
             const template = this.infoTemplates![index].textContent || '';
             infoElement.textContent = this.replaceText(template, infoVariables);
         });
     }
-
     /**
      * Actualiza el estado de los botones de paginación.
      */
@@ -514,14 +481,12 @@ class SectionJS {
         // Seleccionar botones dentro de contenedores estáticos o fuera del contenedor principal
         const prevButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="prev"]')),
-            // Botones dentro de contenedores externos con data-target
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="prev"]`))
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="prev"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
-        
+
         const nextButtons = [
             ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="next"]')),
-            // Botones dentro de contenedores externos con data-target
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="next"]`))
+            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="next"]`))
         ].filter(button => button !== null) as HTMLButtonElement[];
 
         // Actualizar el estado de los botones
@@ -592,15 +557,12 @@ class SectionJS {
      * Agrega un listener para el evento 'sectionjs:getdata'.
      */
     private addListener(): void {
+        if (!this.articleContainer) return;
         this.articleContainer.addEventListener('sectionjs:getdata', (event: Event) => {
-            const customEvent = event as CustomEvent<{ key: string; query?: any }>;
-            const key = customEvent.detail.key;
-            
-            this.articleContainer.dispatchEvent(
-                new CustomEvent(`sectionjs:getdata:${key}`, {
-                    detail: customEvent.detail // Pasa todo el detalle
-                })
-            );
+            const customEvent = event as CustomEvent;
+            const data = customEvent.detail.data;
+            const value = data && this.data ? this.getValue(this.data, data) : this.data;
+            this.articleContainer.dispatchEvent(new CustomEvent(`sectionjs:getdata:${data || 'all'}`, { detail: { value } }));
         });
     }
 
@@ -620,23 +582,18 @@ class SectionJS {
             SectionJS.instances.push(section);
             await section.initSelf(); // Inicializar cada instancia individualmente
         }
-        
-        SectionJS.default = true;
     }
 
     /**
      * Inicializa la instancia actual de SectionJS.
      */
     public async initSelf(): Promise<void> {
-        //if (!this.articleContainer) return;
         this.addListener();
         await this.load();
         await this.findKeyValue();
 
         const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
         this.currentPage = Math.min(this.currentPage, totalPages);
-        this.lastPage = totalPages;
-        this.dataTotal = this.data?.length || 0;
 
         // Verificar si los artículos ya están renderizados
         const hasRenderedArticles = this.articleContainer.hasAttribute('data-section-rendered');
@@ -651,7 +608,6 @@ class SectionJS {
 
         if (prevButton) prevButton.onclick = () => this.paginate('prev');
         if (nextButton) nextButton.onclick = () => this.paginate('next');
-
     }
 
     /**
@@ -689,9 +645,9 @@ class SectionJS {
      * @param attributeValue Nuevo valor del atributo.
      */
     public async setAttribute(attributeName: string, attributeValue: string | number): Promise<void> {
-        const wasObserverActive = this.observerActive; // Guardar el estado del Observer
+        const wasObserverActive = this.observerActive;
         if (wasObserverActive) {
-            this.disableObserver(); // Desactivar el Observer solo si estaba activo
+            this.disableObserver();
         }
 
         const currentValue = this.articleContainer.getAttribute(attributeName);
@@ -701,59 +657,15 @@ class SectionJS {
         }
 
         if (wasObserverActive) {
-            this.enableObserver(); // Reactivar el Observer solo si estaba activo
+            this.enableObserver();
         }
     }
-
-    /**
-     * Escucha cuando la sección termina de renderizar.
-     * @param callback Función que recibe la instancia de SectionJS.
-     */
-    public onRendered(callback: (section: SectionJS) => void): void {
-        this.articleContainer.addEventListener('sectionjs:rendered', (e: Event) => {
-            callback(this);
-        });
-    }
-            /**
-     * Escucha cuando los datos de la sección cambian.
-            * @param callback Función que recibe los nuevos datos.
-            */
-           public onDataChanged(callback: (data: any[]) => void): void {
-               this.articleContainer.addEventListener('sectionjs:datachanged', (e: Event) => {
-                   const customEvent = e as CustomEvent<{ data: any[] }>;
-                   callback(customEvent.detail.data);
-               });
-           }
-       
-           /**
-            * Escucha cuando ocurre un error en la sección.
-            * @param callback Función que recibe el error y mensaje.
-            */
-           public onError(callback: (error: Error, message: string) => void): void {
-               this.articleContainer.addEventListener('sectionjs:error', (e: Event) => {
-                   const customEvent = e as CustomEvent<{ error: Error, message: string }>;
-                   callback(customEvent.detail.error, customEvent.detail.message);
-               });
-           }
-       
-           /**
-            * Escucha cuando se solicita datos específicos (getdata).
-            * @param callback Función que maneja la solicitud.
-            */
-           public onGetData(callback: (dataKey: string) => void): void {
-               this.articleContainer.addEventListener('sectionjs:getdata', (e: Event) => {
-                   const customEvent = e as CustomEvent<{ data: string }>;
-                   callback(customEvent.detail.data);
-               });
-           }
-           
-           
- /**
+/**
      * Escucha solicitudes de datos específicos y permite responder.
      * @param key Clave de datos a escuchar (ej: 'user.email').
      * @param callback Función que retorna el valor solicitado.
      */
- public onDataRequest<T>(key: string, handler: (query?: any) => T | Promise<T>): void {
+public onDataRequest<T>(key: string, handler: (query?: any) => T | Promise<T>): void {
     this.articleContainer.addEventListener(
         `sectionjs:getdata:${key}`,
         async (e: Event) => {
@@ -822,31 +734,57 @@ public async requestData<T>(key: string, query?: any, timeout: number = 5000): P
     });
 }
         
+
+    
     /**
-     * Destruye todas las instancias de SectionJS y limpia los recursos.
-     * Ideal para reinicios completos o pruebas.
-     */
+    * Escucha cuando se solicita datos específicos (getdata).
+    * @param callback Función que maneja la solicitud.
+    */
+    public onGetData(callback: (dataKey: string) => void): void {
+        this.articleContainer.addEventListener('sectionjs:getdata', (e: Event) => {
+        const customEvent = e as CustomEvent<{ data: string }>;
+        callback(customEvent.detail.data);
+        });
+    }
+
+    public onRendered(callback: (detail: RenderEventDetail) => void): void {
+        this.articleContainer.addEventListener('sectionjs:rendered', (e: Event) => {
+            const customEvent = e as CustomEvent<RenderEventDetail>;
+            callback(customEvent.detail);
+        });
+    }
+
+    public onDataChanged(callback: (data: any[]) => void): void {
+        this.articleContainer.addEventListener('sectionjs:datachanged', (e: Event) => {
+            const customEvent = e as CustomEvent<{ data: any[] }>;
+            callback(customEvent.detail.data);
+        });
+    }
+
+    public onError(callback: (error: Error, message: string) => void): void {
+        this.articleContainer.addEventListener('sectionjs:error', (e: Event) => {
+            const customEvent = e as CustomEvent<ErrorEventDetail>;
+            callback(customEvent.detail.error, customEvent.detail.message);
+        });
+    }
+
     public static stopAll(): void {
         SectionJS.instances.forEach(instance => {
-              // Eliminar todos los listeners de eventos personalizados
             instance.articleContainer.replaceWith(instance.articleContainer.cloneNode(true));
        
-            // Limpiar observador de mutaciones
             if (instance.observer) {
                 instance.observer.disconnect();
                 instance.observer = null;
             }
             
-            // Eliminar eventos personalizados
             instance.articleContainer.removeAttribute('data-section-rendered');
             instance.articleContainer.innerHTML = '';
             
-            // Limpiar referencias
             instance.articleTemplate = null;
             instance.infoTemplates = null;
             instance.data = null;
         });
         
-        SectionJS.instances = []; // Vaciar array de instancias
+        SectionJS.instances = [];
     }
 }
