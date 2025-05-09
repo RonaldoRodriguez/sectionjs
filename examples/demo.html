@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SectionJS - Demo Final Simplificado</title>
+    <script src="sectionjs.min.js"></script> {/* Asegúrate que esta es la versión compilada de tu último sectionjs.ts */}
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f4f6f8; color: #333; }
+        .container { max-width: 800px; margin: 15px auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 25px; }
+        h2 { color: #34495e; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #ecf0f1; padding-bottom: 8px; }
+        .section-block { margin-bottom: 25px; padding: 15px; border: 1px solid #dfe6e9; border-radius: 5px; background-color: #fdfdfd;}
+        .item { padding: 8px 0; border-bottom: 1px dashed #e0e0e0; }
+        .item:last-child { border-bottom: none; }
+        .item h3 { margin: 0 0 5px 0; color: #2980b9; font-size: 1.1em; }
+        .item p { margin: 3px 0; font-size: 0.95em; }
+        .item .address { margin-left: 15px; font-size: 0.9em; color: #555; }
+        button {
+            padding: 8px 15px; font-size: 0.9em; color: white; background-color: #3498db;
+            border: none; border-radius: 4px; cursor: pointer; margin-right: 5px; transition: background-color 0.2s;
+        }
+        button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        .status-message { font-weight: bold; }
+        .status-message.active { color: #27ae60; }
+        .status-message.inactive { color: #c0392b; }
+        .pagination-controls button { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Prueba de SectionJS Simplificado</h1>
+
+        <!-- 1. Instancia con data-logic-scope -->
+        <div class="section-block" id="appStatusPanel" data-logic-scope>
+            <h2>Estado de la Aplicación (data-logic-scope)</h2>
+            <p>
+                Estado: 
+                <span class="status-message {{* helpers.isSystemActive() ? 'active' : 'inactive' *}}">
+                    {{* helpers.isSystemActive() ? 'Activo' : 'Inactivo' *}}
+                </span>
+            </p>
+            <p>Última actualización: {{* helpers.getCurrentTime() *}}</p>
+            <button data-logic-on-click="helpers.toggleSystemStatus()">Cambiar Estado</button>
+            <button data-logic-on-click="helpers.isSystemActive() && _instance.refresh()" data-attr-disabled="{{* !helpers.isSystemActive() *}}">Refrescar Panel</button>
+        </div>
+
+        <!-- 2. Instancia con data-src como JSON inline y bucle anidado -->
+        <div class="section-block" id="inlineDataList"
+             data-src='[
+                {"group": "Frutas", "items": ["Manzana", "Banana", "Naranja"]},
+                {"group": "Colores", "items": ["Rojo", "Verde", "Azul", "Amarillo"]},
+                {"group": "Vacío", "items": []}
+             ]'>
+            <h2>Lista Simple (data-src inline)</h2>
+            <div class="item" data-logic-each="g, groupIndex in _instance.data">
+                <h3>{{ groupIndex + 1 }}. Grupo: {{ g.group }}</h3>
+                <p data-logic-if="g.items.length === 0">Este grupo no tiene ítems.</p>
+                <ul data-logic-if="g.items.length > 0">
+                    <li data-logic-each="item, itemIndex in g.items">
+                        {{ itemIndex + 1 }}: {{ item }} (del grupo: {{g.group}})
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 3. Instancia con data-src como URL (API) y paginación -->
+        <div class="section-block" id="userList" 
+             data-src="https://jsonplaceholder.typicode.com/users"
+             data-control-limit="5" 
+             data-control-by="name" 
+             data-control-order="asc">
+            <h2>Lista de Usuarios (data-src URL con Paginación)</h2>
+            
+            <p>
+                Mostrando {{ itemsNow }} de {{ itemsTotal }} usuarios. 
+                Página {{ currentPage }} de {{ totalPages }}.
+            </p>
+
+            <div data-logic-if="data && data.length === 0">
+                <p>No hay usuarios para mostrar en esta página.</p>
+            </div>
+
+            <div class="item" data-logic-each="user in _instance.data">
+                <h3>{{ user.name }} ({{ user.username }})</h3>
+                <p>Email: {{ user.email }}</p>
+                <p>Teléfono: {{ user.phone }}</p>
+                <div class="address" data-logic-if="user.address">
+                    <p><strong>Dirección:</strong> {{ user.address.street }}, {{ user.address.suite }}</p>
+                    <p>{{ user.address.city }} ({{ user.address.zipcode }})</p>
+                </div>
+            </div>
+
+            <div class="pagination-controls">
+                <button data-logic-on-click="_instance.prevPage()" 
+                        data-attr-disabled="{{* currentPage <= 1 *}}"> 
+                    Anterior
+                </button>
+                <button data-logic-on-click="_instance.nextPage()" 
+                        data-attr-disabled="{{* _instance.currentPage >= _instance.totalPages *}}">
+                    Siguiente
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Estado global simulado para el panel de data-logic-scope
+        let systemStatus = {
+            active: true,
+            lastUpdate: new Date()
+        };
+
+        // Registrar Helpers
+        SectionJS.registerHelper({
+            isSystemActive: () => systemStatus.active,
+            getCurrentTime: () => {
+                // Solo muestra hora actual si el sistema está ACTIVO
+                return systemStatus.active ? new Date().toLocaleTimeString() : systemStatus.lastUpdate.toLocaleTimeString();
+            },
+            toggleSystemStatus: () => {
+                systemStatus.active = !systemStatus.active;
+                systemStatus.lastUpdate = new Date(); // Guarda el momento del último cambio
+                const statusPanelInstance = SectionJS.instances.find(inst => inst.name === 'appStatusPanel');
+                statusPanelInstance?.refresh();
+            }
+        });
+
+        // Inicializar todas las instancias SectionJS
+        document.addEventListener('DOMContentLoaded', () => {
+            SectionJS.initAll().then((instances) => {
+                console.log('SectionJS inicializado. Instancias creadas:', instances.map(i => i.name));
+                
+                // Podrías querer refrescar explícitamente las instancias de data-logic-scope
+                // si su estado inicial depende de helpers que podrían haber cambiado
+                // o si quieres asegurar el primer renderizado con datos de helpers.
+                // En este caso, initialize() ya llama a refresh().
+                const statusPanelInstance = instances.find(inst => inst.name === 'appStatusPanel');
+                if (statusPanelInstance && !statusPanelInstance.articleContainer.hasAttribute('data-section-rendered')) {
+                    // statusPanelInstance.refresh(); // Opcional, initialize() ya lo hace.
+                }
+
+            }).catch(error => {
+                console.error('Error al inicializar SectionJS:', error);
+                const errDiv = document.createElement('div');
+                errDiv.style.color = 'red';
+                errDiv.style.border = '1px solid red';
+                errDiv.style.padding = '10px';
+                errDiv.textContent = 'Error al cargar la aplicación SectionJS: ' + error.message;
+                document.body.prepend(errDiv);
+            });
+        });
+    </script>
+</body>
+</html>
