@@ -54,28 +54,29 @@
     <!-- Sección 1: Datos desde API externa -->
     <section id="postsSection"
              class="section-container"
-             data-section="https://jsonplaceholder.typicode.com/posts"
-             data-limit="5"
-             data-order-by="id"
-             data-order="desc"
-             data-default-page="1">
+             data-src="https://jsonplaceholder.typicode.com/posts"
+             data-control-limit="5"
+             data-control-by="id"
+             data-control-order="desc"
+             data-control-page="1">
         
         <!-- Plantilla para cada artículo -->
-        <div data-section-render class="article">
-            <h2>{{ id }}. {{ title }}</h2>
-            <p>{{ body }}</p>
-            <small>Usuario ID: {{ userId }}</small>
+        <div data-logic-each="item in _instance.data"
+             class="article">
+            <h2>{{ item.id }}. {{ item.title }}</h2>
+            <p>{{ item.body }}</p>
+            <small>Usuario ID: {{ item.userId }}</small>
         </div>
 
-        <!-- Elementos estáticos -->
-        <div data-section-static>
+        <!-- Paginación y Estadísticas -->
+        <div>
             <div class="pagination">
-                <button data-action="prev">Anterior</button>
-                <span data-action="info">Página {{ currentPage }} de {{ totalPages }}</span>
-                <button data-action="next">Siguiente</button>
+                <button data-logic-on-click="_instance.prevPage()" data-attr-disabled="{{* currentPage <= 1 *}}">Anterior</button>
+                <span>Página {{ currentPage }} de {{ totalPages }}</span>
+                <button data-logic-on-click="_instance.nextPage()" data-attr-disabled="{{* currentPage >= totalPages *}}">Siguiente</button>
             </div>
             
-            <div class="stats" data-action="info">
+            <div class="stats">
                 Mostrando del {{ firstItemIndex }} al {{ lastItemIndex }} de {{ itemsTotal }} artículos
             </div>
         </div>
@@ -84,38 +85,39 @@
     <!-- Sección 2: Datos inline -->
     <section id="localSection"
              class="section-container"
-             data-section='[
+             data-src='[
                  {"nombre": "Alice", "edad": 28, "puesto": "Desarrollador"},
                  {"nombre": "Bob", "edad": 32, "puesto": "Diseñador"},
                  {"nombre": "Charlie", "edad": 25, "puesto": "Gerente"}
              ]'
-             data-limit="2"
-             data-by="edad"
-             data-order="asc">
+             data-control-limit="2"
+             data-control-by="edad"
+             data-control-order="asc">
         
         <!-- Plantilla para cada elemento -->
-        <div data-section-render class="article">
-            <h3>{{ nombre }}</h3>
-            <p>Edad: {{ edad }}</p>
-            <p>Puesto: {{ puesto }}</p>
+        <div data-logic-each="item in _instance.data"
+             class="article">
+            <h3>{{ item.nombre }}</h3>
+            <p>Edad: {{ item.edad }}</p>
+            <p>Puesto: {{ item.puesto }}</p>
         </div>
 
-        <!-- Controles externos -->
-        <div data-section-static class="pagination">
-            <button data-action="prev">Anterior</button>
-            <span data-action="info">Página {{ currentPage }} de {{ totalPages }}</span>
-            <button data-action="next">Siguiente</button>
+        <!-- Paginación para la sección local -->
+        <div class="pagination">
+            <button data-logic-on-click="_instance.prevPage()" data-attr-disabled="{{* currentPage <= 1 *}}">Anterior</button>
+            <span>Página {{ currentPage }} de {{ totalPages }}</span>
+            <button data-logic-on-click="_instance.nextPage()" data-attr-disabled="{{* currentPage >= totalPages *}}">Siguiente</button>
         </div>
     </section>
 
     <!-- Controles globales -->
     <div class="section-container">
-        <h3>Controles de Paginación</h3>
+        <h3>Controles Globales para "postsSection"</h3>
         
         <div>
             <label>Elementos por página: </label>
             <input type="number" id="itemsPerPage" value="5" min="1" style="width: 60px;">
-            <button onclick="updateItemsPerPage()">Actualizar</button>
+            <button onclick="updateItemsPerPage('postsSection')">Actualizar Límite</button>
         </div>
         
         <div style="margin-top: 10px;">
@@ -123,51 +125,62 @@
         </div>
     </div>
 
-    <script src="../dist/sectionjs.min.js"></script>
+    <script src="../dist/sectionjs.min.js"></script> {/* Asegúrate que la ruta es correcta */}
     <script>
         // Inicialización
-        SectionJS.initAll().then(() => {
-            // Eventos para la primera sección
-            const postsSection = SectionJS.instances.find(i => i.name === 'postsSection');
-            
-            postsSection.onRendered(detail => {
-                console.log('Posts renderizados:', detail.renderedElements);
-            });
-            
-            postsSection.onError((error, message) => {
-                console.error('Error en posts:', message, error);
-            });
-            
-            // Ejemplo de solicitud de datos
-            postsSection.onDataRequest('post', async (query) => {
-                return postsSection.data?.find(p => p.id === query.id);
+        document.addEventListener('DOMContentLoaded', () => {
+            SectionJS.initAll().then((instances) => {
+                console.log('SectionJS inicializado. Instancias:', instances.map(i => i.name));
+
+                // Adjuntar listeners de eventos si es necesario
+                instances.forEach(instance => {
+                    instance.articleContainer.addEventListener('sectionjs:rendered', (e) => {
+                        console.log(`Evento sectionjs:rendered para ${instance.name}:`, e.detail.data);
+                    });
+
+                    instance.articleContainer.addEventListener('sectionjs:loadError', (e) => {
+                        console.error(`Evento sectionjs:loadError para ${instance.name}:`, e.detail.error, e.detail.message);
+                    });
+
+                    instance.articleContainer.addEventListener('sectionjs:dataChanged', (e) => {
+                        console.log(`Evento sectionjs:dataChanged para ${instance.name}:`, e.detail.data);
+                    });
+                });
+
+            }).catch(error => {
+                console.error('Error al inicializar SectionJS:', error);
             });
         });
 
         // Funciones de control
-        function updateItemsPerPage() {
+        function updateItemsPerPage(instanceName) {
             const newLimit = document.getElementById('itemsPerPage').value;
-            SectionJS.apply('postsSection', 'data-limit', newLimit);
+            const instance = SectionJS.instances.find(i => i.name === instanceName);
+            if (instance) {
+                instance.setAttribute('data-control-limit', newLimit);
+            } else {
+                console.warn(`Instancia "${instanceName}" no encontrada para actualizar límite.`);
+            }
         }
 
         function refreshPosts() {
-            SectionJS.instances.forEach(instance => {
-                instance.setAttribute('data-section', instance.dataSourceURL);
-            });
-        }
-
-        // Ejemplo de uso de requestData
-        async function getPostById(id) {
-            try {
-                const post = await SectionJS.instances
-                    .find(i => i.name === 'postsSection')
-                    .requestData('post', { id: id });
-                
-                console.log('Post solicitado:', post);
-            } catch (error) {
-                console.error('Error solicitando post:', error);
+            const postsInstance = SectionJS.instances.find(i => i.name === 'postsSection');
+            if (postsInstance && postsInstance.dataSource) {
+                // Para forzar una recarga, podrías cambiar data-src a algo temporalmente y luego de vuelta,
+                // o si la URL tiene parámetros, modificarlos.
+                // La forma más simple es llamar a initialize si quieres recargar desde la fuente original.
+                console.log('Recargando postsSection...');
+                postsInstance.initialize().catch(e => console.error("Error recargando postsSection", e));
+            } else {
+                console.warn('Instancia "postsSection" no encontrada o sin dataSource para recargar.');
             }
         }
+
+        // Ejemplo de uso de requestData (esto era de una versión anterior,
+        // la API actual no tiene un método `requestData` ni `onDataRequest` incorporado de esa forma)
+        // Si necesitas una funcionalidad similar, tendrías que implementarla usando los datos disponibles
+        // en `instance.allData` o `instance.data`.
+        // function getPostById(id) { ... } // Esta función necesitaría ser reimplementada.
     </script>
 </body>
 </html>
