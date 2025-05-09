@@ -1,812 +1,1048 @@
-interface BaseEventDetail {
-    sectionId: string;
-    timestamp: number;
+// c:\Users\ronal\OneDrive\Escritorio\tutorial\sectionjs.ts
+// sectionjs.ts
+
+interface SectionJSHelpers {
+    [key: string]: (...args: any[]) => any;
 }
 
-interface GetDataEventDetail extends BaseEventDetail {
-    key: string;
-    query?: any;
+interface SectionJSEventDetail {
+    instance: SectionJS;
+    data?: any;
+    error?: Error;
+    message?: string;
+    renderedElements?: HTMLElement[];
+    page?: number;
 }
 
-interface DataResponseEventDetail<T> extends BaseEventDetail {
-    data: T;
-}
-
-interface RenderEventDetail extends BaseEventDetail {
-    pageData: any[];
-    renderedElements: Element[];
-    templateUsed: Element;
-}
-
-interface ErrorEventDetail extends BaseEventDetail {
-    error: unknown;
-    message: string;
-    stack?: string;
-}
-
+type SectionJSEventType =
+    'sectionjs:beforeLoad' |
+    'sectionjs:loaded' |
+    'sectionjs:loadError' |
+    'sectionjs:beforeRender' |
+    'sectionjs:rendered' |
+    'sectionjs:pageChanged' |
+    'sectionjs:dataChanged' |
+    'sectionjs:error';
 
 class SectionJS {
+    public readonly articleContainer: HTMLElement;
+    public readonly name: string;
     
-    public static instances: SectionJS[] = [];
-    private articleContainer: HTMLElement;
-    public name: string | null = null;
-    private articleTemplate: Element | null = null;
-    private infoTemplates: Element[] | null = null;
-    private spanElements: Element[];
-    private dataSourceURL: string | null;
-    private limit: number | null;
-    private order: string;
-    private start: number;
-    private orderBy: string | null;
-    private total: number | null;
-    public dataTotal: number = 0;
+    public allData: any[] | null = null; // Holds the full dataset for data-src instances
+    public data: any[] | null = null;    // Holds the data for the current page (for data-src instances)
+    public scopeDataContext: any = {};   // Holds a single object context for data-logic-scope instances
+
+    // Control attributes
+    public dataSource: string | null = null;
+    private controlLimit: number | null = null;
+    private controlOrder: string = 'ASC';
+    private controlStart: number = 0;
+    private controlBy: string | null = null;
+    private controlTotal: number | null = null; // For server-side pagination total
+    private controlResponsePath: string | null = null;
+    // REMOVED: private controlFindKey: string | null = null;
+    private controlFilter: string | null = null;
+
+    // Pagination state
+    public currentPage: number = 1;
     public totalPages: number = 0;
-    public itemsTotal: number = 0;
-    public itemsNow: number = 0;
-    private defaultPage: number;
-    public firstItemIndex: number = 0;
-    public lastItemIndex: number = 0;
-    private currentPage: number;
-    public lastPage: number = 0;
-    private data: any[] | null = null;
-    private responsePath: string | null;
-    private findKey: string | null;
+    public itemsTotal: number = 0; // Total items in allData after filtering
+    public itemsNow: number = 0;   // Items in the current page
+    public firstItemIndex: number = 0; // 1-based index of the first item on the current page
+    public lastItemIndex: number = 0;  // 1-based index of the last item on the current page
+
     private observer: MutationObserver | null = null;
-    private observerActive: boolean = false;
-    private create_id: string[] = [];
+    public observerActive: boolean = false;
+    private isInitializing: boolean = true;
+    private isLogicScopeInstance: boolean = false; 
+
+    private loopDefinitions: Map<string, { // The string is the placeholder's nodeValue
+        templateHTML: string; 
+        loopVarName: string;
+        indexVarName?: string; 
+        dataSourceKey: string; 
+    }> = new Map();
+    
+    private initialContainerStructureHTML: string = '';
 
 
-    /**
-     * Constructor de la clase SectionJS.
-     * @param articleContainer Contenedor HTML donde se renderizarán los datos.
-     * @throws Error si el contenedor no es válido.
-     */
-    constructor(articleContainer: HTMLElement) {
-        if (!articleContainer) {
-            throw new Error("El contenedor proporcionado no es un elemento válido.");
-        }
+    public static instances: SectionJS[] = [];
+    private static helpers: SectionJSHelpers = {};
 
-        this.articleContainer = articleContainer;
+    private static supportsWeakRef = typeof WeakRef !== 'undefined';
+    private static supportsFinalizationRegistry = typeof FinalizationRegistry !== 'undefined';
+    private static instancesRefs: (WeakRef<SectionJS> | SectionJS)[] = [];
+    private static finalizationRegistry: FinalizationRegistry<string> | null = null;
 
-        // Inicializar elementos "info" y guardar sus plantillas
-        this.spanElements = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-action="info"], [data-section-action="info"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="info"], [data-target="${this.articleContainer.id}"][data-section-action="info"]`)),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"]`)).flatMap(container =>
-                Array.from(container.querySelectorAll('[data-action="info"], [data-section-action="info"]'))
-            )
-        ];
 
-        // Guardar una copia de cada elemento "info" como plantilla
-        this.infoTemplates = this.spanElements.map(element => element.cloneNode(true) as Element);
-
-        // Asignar atributos del contenedor
-        this.dataSourceURL = articleContainer.getAttribute('data-section');
-        this.limit = this.validateNumber(articleContainer.getAttribute('data-limit'), 'data-limit');
-        this.order = articleContainer.getAttribute('data-order') || 'ASC';
-        this.start = this.validateNumber(articleContainer.getAttribute('data-start'), 'data-start') || 0;
-        this.orderBy = articleContainer.getAttribute('data-by');
-        this.total = this.validateNumber(articleContainer.getAttribute('data-total'), 'data-total');
-        this.defaultPage = Math.max(1, this.validateNumber(articleContainer.getAttribute('data-default-page'), 'data-default-page') || 1);
-        this.currentPage = this.defaultPage;
-        this.responsePath = articleContainer.getAttribute('data-response-path');
-        this.findKey = articleContainer.getAttribute('data-find');
-        /*comprobar que el id exista, y si no, generar un nuevo id*/
-        this.name = articleContainer.id && articleContainer.id.trim() !== '' ? articleContainer.id : this.generateId();
-
-        // No activar el Observer por defecto
-    }
-
-    public generateId() {
-        // primero, verificamos si existe o no el id, si existe generamos uno nuevo, y volvemos a comprobar,
-        // y si no existe lo agregamos al array, y lo retornamos:
-
-        let id = `section-${Math.random().toString(36).substring(2, 11)}`;
-        if (this.create_id.includes(id)) {
-            return this.generateId();
+    constructor(elementOrSelector: HTMLElement | string) {
+        let container: HTMLElement | null = null;
+        if (typeof elementOrSelector === 'string') {
+            container = document.querySelector<HTMLElement>(elementOrSelector);
+            if (!container) {
+                throw new Error(`SectionJS: No se encontró el elemento para el selector "${elementOrSelector}".`);
+            }
+        } else if (elementOrSelector instanceof HTMLElement) {
+            container = elementOrSelector;
         } else {
-            this.create_id.push(id);
-            return id;
+            throw new Error("SectionJS: El constructor requiere un selector de string o un HTMLElement.");
+        }
+    
+        this.articleContainer = container;
+        
+        if (!this.articleContainer.id) {
+            this.name = this.generateId();
+        } else {
+            this.name = this.articleContainer.id;
+        }
+    
+        const hasDataSrc = this.articleContainer.hasAttribute('data-src');
+        const hasLogicScope = this.articleContainer.hasAttribute('data-logic-scope');
+
+        if (hasDataSrc) { 
+            this.isLogicScopeInstance = false;
+            this.dataSource = this.sanitizeURL(this.articleContainer.getAttribute('data-src'));
+        } else if (hasLogicScope) {
+            this.isLogicScopeInstance = true;
+            this.dataSource = null;
+            const scopeSrcAttr = this.articleContainer.getAttribute('data-logic-scope');
+            if (scopeSrcAttr && scopeSrcAttr.trim().startsWith('{')) { 
+                try {
+                    this.scopeDataContext = JSON.parse(scopeSrcAttr);
+                } catch (e) {
+                    console.warn(`SectionJS (${this.name}): JSON inválido en data-logic-scope. Usando {}.`, e);
+                    this.scopeDataContext = {};
+                }
+            } else {
+                this.scopeDataContext = {}; 
+            }
+            this.allData = [this.scopeDataContext]; 
+        } else {
+            this.isLogicScopeInstance = false;
+            this.dataSource = null;
+            this.allData = [];
+        }
+    
+        this.loadConfigFromAttributes();
+    
+        if (SectionJS.supportsFinalizationRegistry && !SectionJS.finalizationRegistry) {
+            SectionJS.finalizationRegistry = new FinalizationRegistry((heldValue: string) => {
+                SectionJS.instancesRefs = SectionJS.instancesRefs.filter(refOrInstance => {
+                    if (SectionJS.supportsWeakRef && refOrInstance instanceof WeakRef) {
+                        return refOrInstance.deref() !== undefined;
+                    }
+                    return true;
+                });
+            });
+        }
+        this.addInstance(this);
+        this.enableObserver(); 
+    
+        if (this.dataSource || this.isLogicScopeInstance) { 
+            this.initialize().catch(error => {
+                console.error(`SectionJS (${this.name}): Error durante la inicialización automática.`, error);
+            });
+        } else { 
+            this.isInitializing = false;
+            this.captureInitialTemplates(); 
+            this.updatePaginationState(); 
+            this.dispatchEvent('sectionjs:rendered', { renderedElements: [], data: [] });
+            this.articleContainer.setAttribute('data-section-rendered', 'true');
         }
     }
 
-    /**
-     * Activa el MutationObserver para detectar cambios en los atributos del contenedor.
-     */
-    public enableObserver(): void {
-        if (this.observerActive) return;
+    private generateId(): string {
+        return `sjs-instance-${Math.random().toString(36).substring(2, 9)}`;
+    }
 
-        const attributesToObserve = [
-            'data-find', 'data-limit', 'data-order', 'data-start', 'data-by',
-            'data-total', 'data-default-page', 'data-response-path', 'data-section'
-        ];
+    private addInstance(instance: SectionJS): void {
+        if (!SectionJS.instances.includes(instance)) { 
+            SectionJS.instances.push(instance);
+            if (SectionJS.supportsWeakRef) {
+                const ref = new WeakRef(instance);
+                SectionJS.instancesRefs.push(ref);
+                if (SectionJS.finalizationRegistry) {
+                    SectionJS.finalizationRegistry.register(instance, instance.name, ref);
+                }
+            } else {
+                SectionJS.instancesRefs.push(instance);
+            }
+        }
+    }
+    
+    private static stripTemplateCommentsLogic(htmlString: string): string {
+        if (!htmlString) return '';
+        const commentRegex = /{\/\*[\s\S]*?\*\/}/g;
+        return htmlString.replace(commentRegex, '');
+    }
 
-        this.observer = new MutationObserver((mutationsList) => {
-            for (const mutation of mutationsList) {
-                if (mutation.type === 'attributes' && mutation.attributeName) {
-                    this.handleAttrChange(mutation.attributeName);
+    // En sectionjs.ts
+
+    private captureInitialTemplates(): void {
+        this.loopDefinitions.clear();
+        const clonedContainer = this.articleContainer.cloneNode(true) as HTMLElement;
+        let loopCounter = 0;
+
+        // Función recursiva para encontrar y reemplazar bucles con placeholders
+        const processElementForLoopCapture = (currentElement: HTMLElement) => {
+            // Iterar sobre una copia de los hijos porque vamos a modificar la estructura (reemplazar nodos)
+            const children = Array.from(currentElement.children);
+
+            for (const child of children) {
+                if (child instanceof HTMLElement) {
+                    if (child.hasAttribute('data-logic-each')) {
+                        const loopElement = child;
+                        const directiveValue = loopElement.dataset.logicEach!;
+                        
+                        // Capturar el outerHTML ANTES de recursar en sus hijos para placeholders
+                        // Esto asegura que la plantilla del bucle externo contenga el marcado original
+                        // de sus bucles internos, los cuales también serán convertidos a placeholders
+                        // en el initialContainerStructureHTML general.
+                        
+                        // Primero, recursar en los hijos del loopElement para que los bucles internos
+                        // dentro de SU plantilla también sean convertidos a placeholders SI la plantilla
+                        // se va a usar para generar el initialContainerStructureHTML.
+                        // PERO, la plantilla que guardamos para ESTE bucle debe ser su outerHTML original.
+                        
+                        const templateHTML = SectionJS.stripTemplateCommentsLogic(loopElement.outerHTML);
+                        const [loopVarName, dataSourceKey, indexVarName] = this.parseLoopDirective(directiveValue);
+                        
+                        const placeholderText = `SJS-LOOP-PLACEHOLDER-${this.name}-${loopCounter++}`;
+                        const placeholder = document.createComment(placeholderText);
+
+                        this.loopDefinitions.set(placeholder.nodeValue!, {
+                            templateHTML, loopVarName, indexVarName, dataSourceKey
+                        });
+
+                        // Reemplazar el loopElement con el placeholder en el clonedContainer
+                        if (loopElement.parentNode) {
+                            loopElement.parentNode.replaceChild(placeholder, loopElement);
+                        }
+                        // No recursar en el loopElement original porque su estructura completa es la plantilla.
+                        // El placeholder lo reemplaza en el clonedContainer.
+                    } else {
+                        // Si no es un bucle, recursar para encontrar bucles anidados más profundamente
+                        processElementForLoopCapture(child);
+                    }
                 }
             }
-        });
+        };
 
-        this.observer.observe(this.articleContainer, {
-            attributes: true,
-            attributeFilter: attributesToObserve,
-            subtree: false
-        });
+        processElementForLoopCapture(clonedContainer);
+        this.initialContainerStructureHTML = SectionJS.stripTemplateCommentsLogic(clonedContainer.innerHTML);
+    }
 
+
+    private parseLoopDirective(directiveValue: string): [string, string, string | undefined] {
+        const inMatch = directiveValue.match(/^(.*)\s+in\s+(.+)$/);
+        if (!inMatch) {
+            console.warn(`SectionJS (${this.name}): Formato de directiva de bucle inválido: "${directiveValue}". Usando "item in _instance.data".`);
+            return ['item', '_instance.data', undefined];
+        }
+        const loopVarsPart = inMatch[1].trim();
+        const dataSourceKey = inMatch[2].trim();
+        
+        const varParts = loopVarsPart.split(',').map(v => v.trim());
+        const loopVarName = varParts[0];
+        const indexVarName = varParts.length > 1 ? varParts[1] : undefined;
+
+        return [loopVarName, dataSourceKey, indexVarName];
+    }
+    
+    public static stripGlobalComments(rootElement: HTMLElement = document.body): void {
+        const walker = document.createTreeWalker(
+            rootElement,
+            NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT,
+            null
+        );
+        const nodesToRemove: Node[] = [];
+        const nodesToModify: { node: Text, newValue: string }[] = [];
+        let node;
+        while (node = walker.nextNode()) {
+            if (node.nodeType === Node.COMMENT_NODE) {
+                const commentNode = node as Comment;
+                if (commentNode.nodeValue && commentNode.nodeValue.trim().startsWith('{/*') && commentNode.nodeValue.trim().endsWith('*/}')) {
+                     nodesToRemove.push(commentNode);
+                }
+            } else if (node.nodeType === Node.TEXT_NODE) {
+                const textNode = node as Text;
+                const originalValue = textNode.nodeValue;
+                if (originalValue && originalValue.includes('{/*')) {
+                    const newValue = SectionJS.stripTemplateCommentsLogic(originalValue);
+                    if (newValue !== originalValue) {
+                        nodesToModify.push({ node: textNode, newValue });
+                    }
+                }
+            }
+        }
+        nodesToModify.forEach(mod => { mod.node.nodeValue = mod.newValue; });
+        nodesToRemove.forEach(node => { node.parentNode?.removeChild(node); });
+    }
+
+    private loadConfigFromAttributes(): void {
+        if (!this.isLogicScopeInstance) { 
+            this.dataSource = this.sanitizeURL(this.articleContainer.getAttribute('data-src'));
+        }
+        this.controlLimit = this.validateNumber(this.articleContainer.getAttribute('data-control-limit'), 'data-control-limit');
+        this.controlOrder = this.articleContainer.getAttribute('data-control-order')?.toUpperCase() || 'ASC';
+        this.controlStart = this.validateNumber(this.articleContainer.getAttribute('data-control-start'), 'data-control-start') || 0;
+        this.controlBy = this.articleContainer.getAttribute('data-control-by');
+        this.controlTotal = this.validateNumber(this.articleContainer.getAttribute('data-control-total'), 'data-control-total');
+        this.currentPage = Math.max(1, this.validateNumber(this.articleContainer.getAttribute('data-control-page'), 'data-control-page') || 1);
+        this.controlResponsePath = this.articleContainer.getAttribute('data-control-response-path');
+        this.controlFilter = this.articleContainer.getAttribute('data-control-filter');
+    }
+
+    private sanitizeURL(url: string | null): string | null {
+        if (url === null) return null;
+        const trimmedUrl = url.trim();
+        if ((trimmedUrl.startsWith('[') && trimmedUrl.endsWith(']')) || (trimmedUrl.startsWith('{') && trimmedUrl.endsWith('}'))) {
+            return trimmedUrl; 
+        }
+        return trimmedUrl;
+    }
+
+    private validateNumber(value: string | null, attributeName: string): number | null {
+        if (value === null) return null;
+        const num = parseInt(value, 10);
+        if (isNaN(num)) {
+            console.warn(`SectionJS (${this.name}): Valor inválido para ${attributeName}: "${value}". Se esperaba un número.`);
+            return null;
+        }
+        return num;
+    }
+
+    public static registerHelpers(helpers: SectionJSHelpers): void {
+        for (const [name, fn] of Object.entries(helpers)) {
+            SectionJS.registerHelper(name, fn);
+        }
+    }
+
+    public static registerHelper(nameOrObject: string | Record<string, (...args: any[]) => any>, fn?: (...args: any[]) => any): void {
+        if (typeof nameOrObject === 'string' && typeof fn === 'function') {
+            SectionJS.helpers[nameOrObject] = fn;
+        } else if (typeof nameOrObject === 'object' && nameOrObject !== null) {
+            for (const name in nameOrObject) {
+                if (Object.prototype.hasOwnProperty.call(nameOrObject, name) && typeof nameOrObject[name] === 'function') {
+                    SectionJS.helpers[name] = nameOrObject[name];
+                }
+            }
+        } else {
+            console.warn('SectionJS.registerHelper: Argumentos inválidos.');
+        }
+    }
+
+    public async initialize(): Promise<void> {
+        this.isInitializing = true;
+        this.dispatchEvent('sectionjs:beforeLoad');
+        try {
+            if (this.isLogicScopeInstance) {
+                const scopeSrcAttr = this.articleContainer.getAttribute('data-logic-scope');
+                if (scopeSrcAttr && scopeSrcAttr.trim().startsWith('{')) { 
+                     try {
+                        const parsedData = JSON.parse(scopeSrcAttr);
+                        this.scopeDataContext = typeof parsedData === 'object' && !Array.isArray(parsedData) ? parsedData : {};
+                        this.allData = [this.scopeDataContext]; 
+                    } catch (e) { /* already handled in constructor or use default {} */ }
+                }
+            } else if (this.dataSource) { 
+                const rawData = await this.fetchData();
+                this.processFetchedData(rawData || []); 
+            } else {
+                this.allData = []; 
+            }
+
+            if (!Array.isArray(this.allData)) { 
+                console.warn(`SectionJS (${this.name}): this.allData no es un array después de la carga inicial. Forzando a [].`, this.allData);
+                this.allData = [];
+            }
+            
+            this.captureInitialTemplates(); 
+
+            this.dispatchEvent('sectionjs:loaded', { data: this.allData });
+            this.refresh(); 
+        } catch (error: any) {
+            this.dispatchEvent('sectionjs:loadError', { error, message: `Error cargando datos para ${this.name}` });
+            console.error(`SectionJS (${this.name}): Error durante la inicialización.`, error);
+            this.allData = this.isLogicScopeInstance ? [this.scopeDataContext] : [];
+            try { this.captureInitialTemplates(); } catch(e) { /* Silently fail template capture on error path */ }
+            this.refresh(); 
+        } finally {
+            this.isInitializing = false;
+        }
+    }
+
+    public static async initAll(options: any = {}): Promise<SectionJS[]> {
+        SectionJS.stripGlobalComments(document.body);
+        const createdInstances: SectionJS[] = [];
+        const processedContainers: HTMLElement[] = [];
+
+        const dataDrivenContainers = document.querySelectorAll<HTMLElement>('[data-src]');
+        for (const container of Array.from(dataDrivenContainers)) {
+            if (SectionJS.instances.some(inst => inst.articleContainer === container)) continue;
+            try {
+                const instance = new SectionJS(container);
+                createdInstances.push(instance);
+                processedContainers.push(container);
+            } catch (error) {
+                console.error("SectionJS.initAll: Error creando instancia data-driven:", container, error);
+            }
+        }
+
+        const scopeContainers = document.querySelectorAll<HTMLElement>('[data-logic-scope]');
+        for (const container of Array.from(scopeContainers)) {
+            if (processedContainers.includes(container) || SectionJS.instances.some(inst => inst.articleContainer === container)) continue;
+            
+            if (!container.id) container.id = `sjs-scope-${Math.random().toString(36).substring(2, 9)}`;
+            try {
+                const instance = new SectionJS(container);
+                createdInstances.push(instance);
+            } catch (error) { 
+                console.error(`SectionJS.initAll: Error creando instancia data-logic-scope:`, container, error);
+            }
+        }
+        
+        document.dispatchEvent(new CustomEvent('sectionjs:allInitialized', { detail: { instances: createdInstances } }));
+        return createdInstances;
+    }
+
+
+
+    private applyFiltersAndSort(data: any[]): any[] {
+        let processedData = [...data]; 
+
+        if (this.controlFilter) {
+            try {
+                const filterFnOrExpr = this.controlFilter;
+                const baseScope = this.createBaseScope(processedData); 
+                if (SectionJS.helpers[filterFnOrExpr] && typeof SectionJS.helpers[filterFnOrExpr] === 'function') {
+                    processedData = processedData.filter(item => SectionJS.helpers[filterFnOrExpr](item, this));
+                } else { 
+                    processedData = processedData.filter(item => {
+                        const itemScope = Object.create(baseScope);
+                        itemScope.item = item; 
+                        return this.evaluateExpression(filterFnOrExpr, itemScope);
+                    });
+                }
+            } catch (e) {
+                console.error(`SectionJS (${this.name}): Error aplicando filtro "${this.controlFilter}".`, e);
+            }
+        }
+
+        if (this.controlBy) {
+            processedData.sort((a, b) => {
+                let valA = this.getValueFromPath(a, this.controlBy!);
+                let valB = this.getValueFromPath(b, this.controlBy!);
+                const aIsNull = valA === null || valA === undefined;
+                const bIsNull = valB === null || valB === undefined;
+
+                if (aIsNull && !bIsNull) return this.controlOrder === 'ASC' ? 1 : -1; 
+                if (!aIsNull && bIsNull) return this.controlOrder === 'ASC' ? -1 : 1; 
+                if (aIsNull && bIsNull) return 0;
+
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
+                } else if (typeof valA === 'number' && typeof valB === 'number') {
+                    // Standard numeric comparison
+                } else { 
+                    valA = String(valA);
+                    valB = String(valB);
+                }
+
+                if (valA < valB) return this.controlOrder === 'ASC' ? -1 : 1;
+                if (valA > valB) return this.controlOrder === 'ASC' ? 1 : -1;
+                return 0;
+            });
+        }
+        return processedData;
+    }
+
+    private getValueFromPath(obj: any, path: string): any {
+        if (!path || typeof obj !== 'object' || obj === null) return undefined; 
+        return path.split('.').reduce((currentObject, key) => {
+            if (currentObject === null || currentObject === undefined || typeof currentObject !== 'object') {
+                return undefined;
+            }
+            return currentObject[key];
+        }, obj);
+    }
+
+
+    public refresh(forceReload: boolean = false): void {
+        if (this.isInitializing && !this.articleContainer.hasAttribute('data-section-rendered')) {
+            // Allow first render during initialization
+        } else if (this.isInitializing) {
+            console.warn(`SectionJS (${this.name}): Refresh llamado durante inicialización. Omitiendo.`);
+            return;
+        }
+
+        if (!this.allData && !this.isLogicScopeInstance) { 
+            this.data = [];
+            this.updatePaginationState();
+            this.render([]); 
+            return;
+        }
+        
+        let dataToProcess = this.isLogicScopeInstance ? (this.allData || [this.scopeDataContext]) : (this.allData || []);
+        if (!Array.isArray(dataToProcess) && this.isLogicScopeInstance) {
+            dataToProcess = [dataToProcess]; 
+        } else if (!Array.isArray(dataToProcess)) {
+            dataToProcess = [];
+        }
+
+        const filteredAndSortedData = this.isLogicScopeInstance ? dataToProcess : this.applyFiltersAndSort(dataToProcess);
+        this.itemsTotal = filteredAndSortedData.length;
+
+        const pageSize = this.controlLimit && this.controlLimit > 0 ? this.controlLimit : this.itemsTotal;
+        this.totalPages = pageSize > 0 ? Math.ceil(this.itemsTotal / pageSize) : 1;
+        if (this.totalPages === 0 && this.itemsTotal > 0 && pageSize === 0) this.totalPages = 1; 
+        if (this.totalPages === 0 && this.itemsTotal === 0) this.totalPages = 1; 
+
+        this.currentPage = Math.max(1, Math.min(this.currentPage, this.totalPages || 1));
+
+        const startIndex = (this.currentPage - 1) * (pageSize || 0) + (this.controlStart || 0);
+        const endIndex = (pageSize > 0) ? (startIndex + pageSize) : this.itemsTotal;
+
+        this.data = this.isLogicScopeInstance ? filteredAndSortedData : filteredAndSortedData.slice(startIndex, endIndex);
+        
+        this.updatePaginationState(); 
+        this.render(this.data); 
+
+        if (!this.isInitializing) {
+            this.dispatchEvent('sectionjs:dataChanged', { data: this.data });
+        }
+        if (forceReload && this.dataSource) {
+            this.fetchData().then(rawData => {
+                this.processFetchedData(rawData);
+                this.updatePaginationState();
+                this.render(this.data || []);
+            }).catch(error => {
+                console.error("Error al recargar datos:", error);
+            });
+        } else {
+            this.updatePaginationState(); // Añadir esta línea
+            this.render(this.data || []);
+        }
+    }
+
+    
+
+    private render(pageData: any[]): void { 
+        this.dispatchEvent('sectionjs:beforeRender', { data: pageData });
+
+        this.articleContainer.innerHTML = this.initialContainerStructureHTML;
+        
+        const baseScopeData = this.isLogicScopeInstance ? (this.allData ? this.allData[0] : {}) : pageData;
+        this.processNode(this.articleContainer, this.createBaseScope(baseScopeData));
+        
+        this.updatePaginationControls();
+        this.articleContainer.setAttribute('data-section-rendered', 'true');
+        this.dispatchEvent('sectionjs:rendered', { renderedElements: Array.from(this.articleContainer.children) as HTMLElement[], data: pageData });
+    }
+
+    private createBaseScope(currentPageData: any[] | any): any {
+        return {
+            _instance: this,
+            helpers: SectionJS.helpers,
+            data: currentPageData, 
+        };
+    }
+
+    private processNode(node: Node, scope: any): void {
+        if (node.nodeType === Node.COMMENT_NODE) {
+            const commentNode = node as Comment;
+            const loopDef = this.loopDefinitions.get(commentNode.nodeValue!); 
+            if (loopDef && node.parentNode) {
+                const parentForLoopItems = node.parentNode;
+                const itemsFragment = document.createDocumentFragment();
+                let loopDataArray: any[];
+    
+                try {
+                    const evaluatedData = this.evaluateExpression(loopDef.dataSourceKey, scope);
+                    loopDataArray = Array.isArray(evaluatedData) ? evaluatedData : [];
+                } catch (e) {
+                    console.error(`SectionJS (${this.name}): Error al evaluar la fuente de datos del bucle "${loopDef.dataSourceKey}" en el scope:`, scope, e);
+                    loopDataArray = [];
+                }
+                
+                // loopDataArray es la data que se debe iterar. 
+                // Si loopDef.dataSourceKey fue '_instance.data', loopDataArray ya es la data paginada por refresh().
+                loopDataArray.forEach((itemData, index) => {
+                    
+                    const itemScope = Object.create(scope); 
+                    itemScope[loopDef.loopVarName] = itemData;
+                    if (loopDef.indexVarName) {
+                        itemScope[loopDef.indexVarName] = index;
+                    }
+                    if (loopDef.dataSourceKey === '_instance.data') { 
+                        itemScope['data'] = loopDataArray;
+                        // Esto permite que dentro del bucle, {{ data.length }} se refiera
+                        // a la longitud de la colección que se está iterando (la página actual).
+                    
+                    }
+    
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = loopDef.templateHTML;
+                    const loopTemplateElement = tempDiv.firstElementChild;
+    
+                    if (loopTemplateElement) {
+                        const clonedElement = loopTemplateElement.cloneNode(true) as HTMLElement;
+                        clonedElement.removeAttribute('data-logic-each');
+                        this.processNode(clonedElement, itemScope); // Procesar hijos recursivamente
+                        itemsFragment.appendChild(clonedElement);
+                    }
+                });
+                parentForLoopItems.replaceChild(itemsFragment, commentNode); 
+                return; 
+            }
+        }
+        
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const htmlElement = node as HTMLElement;
+    
+            // Procesar elementos con data-logic-each (bucles anidados)
+            if (htmlElement.hasAttribute('data-logic-each')) {
+                const directiveValue = htmlElement.dataset.logicEach!;
+                const [loopVarName, dataSourceKey, indexVarName] = this.parseLoopDirective(directiveValue);
+                const templateHTML = htmlElement.outerHTML;
+    
+                if (htmlElement.parentNode) {
+                    const parentForLoopItems = htmlElement.parentNode;
+                    const itemsFragment = document.createDocumentFragment();
+                    let loopDataArray: any[];
+                    try {
+                        const evaluatedData = this.evaluateExpression(dataSourceKey, scope);
+                        loopDataArray = Array.isArray(evaluatedData) ? evaluatedData : [];
+                    } catch (e) { 
+                        console.error("Error en dataSource de bucle anidado", e);
+                        // Asegúrate de que el error no detenga el renderizado de otras partes si es posible,
+                        // o al menos que el error sea claro.
+                        // Considera si quieres que el elemento original permanezca o sea eliminado.
+                        loopDataArray = []; 
+                    }
+    
+                    loopDataArray.forEach((itemData, index) => {
+                        const itemScope = Object.create(scope);
+                        itemScope[loopVarName] = itemData;
+                        if (indexVarName) itemScope[indexVarName] = index;
+                        if (dataSourceKey === '_instance.data') itemScope['data'] = loopDataArray;
+                        // De nuevo, si el bucle anidado usa '_instance.data' como fuente,
+                        // esto es problemático ya que '_instance.data' debería ser la data paginada principal.
+                        // Los bucles anidados usualmente iteran sobre propiedades del item del bucle padre (ej. item.children).
+    
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = templateHTML;
+                        const loopTemplateClone = tempDiv.firstElementChild!.cloneNode(true) as HTMLElement;
+                        loopTemplateClone.removeAttribute('data-logic-each');
+                        this.processNode(loopTemplateClone, itemScope); // Procesar hijos recursivamente
+                        itemsFragment.appendChild(loopTemplateClone);
+                    });
+                    parentForLoopItems.replaceChild(itemsFragment, htmlElement);
+                }
+                return;
+            }
+    
+            // Procesar condiciones data-logic-if y data-logic-show
+            const ifConditionAttr = htmlElement.getAttribute('data-logic-if');
+            if (ifConditionAttr) {
+                const expressionString = this.extractExpressionString(ifConditionAttr);
+                const shouldRender = this.evaluateExpression(expressionString, scope);
+                if (!shouldRender) {
+                    htmlElement.remove();
+                    return;
+                }
+            }
+            const showConditionAttr = htmlElement.getAttribute('data-logic-show');
+            if (showConditionAttr) {
+                const expressionString = this.extractExpressionString(showConditionAttr);
+                htmlElement.style.display = this.evaluateExpression(expressionString, scope) ? '' : 'none';
+            }
+    
+            // Procesar atributos dinámicos (data-attr-*, data-logic-on-*, etc.)
+            this.processAttributes(htmlElement, scope);
+    
+            // ****** CAMBIO CLAVE AQUÍ ****** 
+            // Procesar TODOS los hijos sin verificar si tienen parentElement
+            Array.from(htmlElement.childNodes).forEach(child => this.processNode(child, scope));
+    
+        } else if (node.nodeType === Node.TEXT_NODE) {
+            this.processTextNode(node as Text, scope);
+        }
+    }
+    
+    private async fetchData(): Promise<any> {
+        if (!this.dataSource) return null;
+        const trimmedDataSource = this.dataSource.trim();
+        if ((trimmedDataSource.startsWith('[') && trimmedDataSource.endsWith(']')) || 
+            (trimmedDataSource.startsWith('{') && trimmedDataSource.endsWith('}'))) {
+            try {
+                return JSON.parse(trimmedDataSource);
+            } catch (e) {
+                console.error(`SectionJS (${this.name}): Error parseando JSON inline de data-src.`, e);
+                throw e; 
+            }
+        }
+        const response = await fetch(trimmedDataSource);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for URL: ${trimmedDataSource}`);
+        return await response.json();
+    }
+
+    private processFetchedData(rawData: any): void {
+        // Asegurar que itemsTotal se actualice
+        this.itemsTotal = rawData.length; // Para APIs sin paginación server-side
+        this.allData = rawData;
+    }
+
+    private processAttributes(element: HTMLElement, context: any): void {
+        const attributesToSet: { name: string, value: string }[] = [];
+        const attributesToRemove: string[] = []; 
+
+        for (const attr of Array.from(element.attributes)) {
+            if (attr.name.startsWith('data-attr-')) {
+                const realAttrName = attr.name.substring('data-attr-'.length);
+                const expression = this.extractExpressionString(attr.value); 
+                const expressionValue = this.evaluateExpression(expression, context);
+                const booleanAttributes = ['disabled', 'checked', 'selected', 'readonly', 'hidden', 'multiple', 'required', 'open', 'defer', 'async', 'ismap', 'autoplay', 'controls', 'loop', 'muted', 'playsinline'];
+                
+                if (booleanAttributes.includes(realAttrName.toLowerCase())) {
+                    if (expressionValue === true || expressionValue === 'true' || expressionValue === '') {
+                        attributesToSet.push({ name: realAttrName, value: '' });
+                    } else {
+                        attributesToRemove.push(realAttrName);
+                    }
+                } else if (expressionValue !== null && expressionValue !== undefined) {
+                    attributesToSet.push({ name: realAttrName, value: String(expressionValue) });
+                } else { 
+                    attributesToRemove.push(realAttrName);
+                }
+            }
+            else if (attr.name.startsWith('data-logic-on-')) {
+                const eventName = attr.name.substring('data-logic-on-'.length);
+                const actionExpression = attr.value;
+                if ((element as any)._sjs_listeners && (element as any)._sjs_listeners[eventName]) {
+                    element.removeEventListener(eventName, (element as any)._sjs_listeners[eventName]);
+                }
+                const eventListener = (event: Event) => {                    
+                    const eventScope = { ...context, event, _element: element };
+                    this.evaluateExpression(actionExpression, eventScope);
+                };
+                element.addEventListener(eventName, eventListener);
+                if (!(element as any)._sjs_listeners) { (element as any)._sjs_listeners = {}; }
+                (element as any)._sjs_listeners[eventName] = eventListener; 
+            }
+            else if (attr.name === 'data-logic-class') { 
+                 const expressionString = this.extractExpressionString(attr.value);
+                 const classValue = this.evaluateExpression(expressionString, context);
+                 if (typeof classValue === 'string') {
+                    classValue.split(' ').forEach(cls => { if(cls) element.classList.add(cls); });
+                 } else if (Array.isArray(classValue)) {
+                    classValue.forEach(cls => { if(typeof cls === 'string' && cls) element.classList.add(cls); });
+                 } else if (typeof classValue === 'object' && classValue !== null) {
+                    for (const key in classValue) {
+                        if (Object.prototype.hasOwnProperty.call(classValue, key)) {
+                            element.classList.toggle(key, !!classValue[key]);
+                        }
+                    }
+                 }
+            }
+             else if (attr.value.includes('{{') && !attr.name.startsWith('data-')) { 
+                const newValue = this.interpolateText(attr.value, context);
+                if (newValue !== attr.value) {
+                    attributesToSet.push({ name: attr.name, value: newValue });
+                }
+            }
+        }
+        attributesToRemove.forEach(attrName => element.removeAttribute(attrName));
+        attributesToSet.forEach(attr => element.setAttribute(attr.name, attr.value));
+    }
+
+    private processTextNode(textNode: Text, context: any): void {
+        const originalText = textNode.nodeValue || '';
+        if (originalText.includes('{{')) {
+            textNode.nodeValue = this.interpolateText(originalText, context);
+        }
+    }
+    private extractExpressionString(value: string): string {
+        if (value.startsWith('{{*') && value.endsWith('*}}')) {
+            return value.slice(3, -3).trim();
+        }
+        return value.trim();
+    }
+
+    private interpolateText(text: string, context: any): string {
+        return text.replace(/\{\{\s*(?:(\*)\s*(.*?)\s*\*|(.*?))\s*}}/g, (match, isExprStar, exprContent, simpleVarContent) => {
+            const expression = isExprStar ? exprContent.trim() : simpleVarContent.trim();
+            let value: any;
+            try {
+                // console.log(`SectionJS (${this.name}): Interpolate: expr="${expression}" with context keys:`, Object.keys(context), 'prototypical keys might exist too');
+                value = this.evaluateExpression(expression, context);
+                // if (value === undefined) {
+                //     console.warn(`SectionJS (${this.name}): Expression "${expression}" evaluated to undefined. Context:`, context);
+                // }
+                // For {{ variable }} (no star), escape HTML. For {{* expression *}}, use raw value.
+                return value !== null && value !== undefined ? (isExprStar ? String(value) : this.escapeHtml(String(value))) : '';
+            } catch (e) {
+                console.error(`SectionJS (${this.name}): Error evaluando interpolación "${match}"`, e, context);
+                return `[Error: ${match}]`;
+            }
+        });
+    }
+
+    private escapeHtml(unsafe: string): string {
+        if (typeof unsafe !== 'string') { 
+            if (unsafe === null || unsafe === undefined) return '';
+            unsafe = String(unsafe);
+        }
+        const escapeMap: { [char: string]: string } = {
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+        };
+        return unsafe.replace(/[&<>"']/g, char => escapeMap[char] || char);
+    }
+
+    private evaluateExpression(expression: string, context: any): any {
+        const evaluationContext: Record<string, any> = {};
+
+        // 1. Add properties from the context's prototype chain (e.g., from baseScope if context is itemScope)
+        let currentProto = Object.getPrototypeOf(context);
+        while (currentProto && currentProto !== Object.prototype) {
+            Object.getOwnPropertyNames(currentProto).forEach(key => {
+                if (!evaluationContext.hasOwnProperty(key)) {
+                    evaluationContext[key] = (currentProto as any)[key];
+                }
+            });
+            currentProto = Object.getPrototypeOf(currentProto);
+        }
+        
+        // 2. Add own properties of the context (e.g., loop item 'g', 'user', 'index')
+        // These will override anything from the prototype chain with the same name.
+        for (const key in context) {
+            if (Object.prototype.hasOwnProperty.call(context, key)) {
+                evaluationContext[key] = context[key];
+            }
+        }
+
+        // 3. Ensure _instance and helpers are directly available in the evaluationContext.
+        //    This makes them accessible directly or via `this` inside the dynamic function.
+        evaluationContext._instance = this; // The current SectionJS instance
+        evaluationContext.helpers = SectionJS.helpers;
+        
+        // 4. Add other direct instance properties for convenience (e.g., direct `currentPage` access)
+        //    Only add if not already defined by the context (e.g., a loop variable named 'data').
+        const directInstanceProps: Record<string, any> = {
+            
+            currentPage: this.currentPage,
+            totalPages: this.totalPages,
+            itemsTotal: this.itemsTotal, itemsNow: this.itemsNow,
+            firstItemIndex: this.firstItemIndex, lastItemIndex: this.lastItemIndex,
+             // 'data' and 'allData' are often part of the 'context' or accessible via '_instance.data'
+        };
+        for (const key in directInstanceProps) {
+            if (!evaluationContext.hasOwnProperty(key)) {
+                evaluationContext[key] = directInstanceProps[key];
+            }
+        }
+
+        const argNames = Object.keys(evaluationContext);
+        const argValues = argNames.map(key => evaluationContext[key]);
+
+        try {
+            const func = new Function(...argNames, `"use strict"; try { return (${expression}); } catch(e) { console.error("Error in expression: ${expression.replace(/"/g, '\\"').replace(/\n/g, '\\n')} with context keys:", Object.keys(this).join(', '), e); return undefined; }`);
+            return func.apply(evaluationContext, argValues);
+        } catch (e) {
+            console.error(`SectionJS (${this.name}): Error creando función para expresión "${expression}"`, e, evaluationContext);
+            return undefined;
+        }
+    }
+
+    private updatePaginationState(): void {
+        
+    
+        if (this.dataSource) { // Solo para instancias con data-src externo
+            const pageSize = this.controlLimit || 3;
+            this.totalPages = Math.ceil(this.itemsTotal / pageSize);
+            this.currentPage = Math.min(this.currentPage, this.totalPages);
+        }
+        if (!this.data || this.data.length === 0) {
+            this.itemsNow = 0;
+            this.firstItemIndex = 0;
+            this.lastItemIndex = 0;
+        } else {
+            this.itemsNow = this.data.length;
+            const pageSizeForIndex = (this.controlLimit && this.controlLimit > 0) ? this.controlLimit : this.itemsTotal;
+            if (this.itemsTotal > 0) {
+                 this.firstItemIndex = (this.currentPage - 1) * pageSizeForIndex + (this.controlStart || 0) + 1;
+                 this.lastItemIndex = this.firstItemIndex + this.itemsNow - 1;
+            } else {
+                this.firstItemIndex = 0;
+                this.lastItemIndex = 0;
+            }
+        }
+    }
+
+    private updatePaginationControls(): void {
+        if (this.isLogicScopeInstance || !this.controlLimit || this.controlLimit <= 0) {
+            this.articleContainer.querySelectorAll('[data-pagination-info], [data-action="prev"], [data-action="next"]')
+                .forEach(el => {
+                    if (el.hasAttribute('data-pagination-info')) el.textContent = '';
+                    if (el.tagName === 'BUTTON') (el as HTMLButtonElement).disabled = true;
+                });
+            return;
+        }
+    
+        const paginationScope = this.createBaseScope(this.data || []);
+    
+        this.articleContainer.querySelectorAll('[data-pagination-info]').forEach(el => {
+            if ((el as HTMLElement).dataset.sjsOriginalPaginationInfo === undefined) {
+                (el as HTMLElement).dataset.sjsOriginalPaginationInfo = el.textContent || '';
+            }
+            const template = (el as HTMLElement).dataset.sjsOriginalPaginationInfo;
+            el.textContent = this.interpolateText(template || '', paginationScope);
+        });
+    
+        // Buttons are now handled by data-logic-on-click and data-attr-disabled
+        // We just need to ensure their disabled state is updated if they rely on _instance properties
+        // This will happen naturally if their data-attr-disabled uses _instance.currentPage etc.
+        // and a refresh is triggered.
+    }
+
+    public nextPage(): void {
+        if (this.currentPage < (this.totalPages || 1)) {
+            this.currentPage++;
+            this.refresh(true); // Forzar recarga
+            this.dispatchEvent('sectionjs:pageChanged', { page: this.currentPage });
+        }
+    }
+    
+    public prevPage(): void {
+        if (this.currentPage > 1) {
+            this.currentPage--;
+            this.refresh(true); // Forzar recarga
+            this.dispatchEvent('sectionjs:pageChanged', { page: this.currentPage });
+        }
+    }
+    public setPage(pageNumber: number): void {
+        const newPage = Math.max(1, Math.min(pageNumber, this.totalPages || 1));
+        if (newPage !== this.currentPage) {
+            this.currentPage = newPage;
+            this.refresh();
+            this.dispatchEvent('sectionjs:pageChanged', { page: this.currentPage });
+        }
+    }
+
+    public enableObserver(): void {
+        if (this.observerActive || this.observer || this.isLogicScopeInstance) return; 
+        const attributesToObserve = [
+            'data-src', 'data-control-limit', 'data-control-order', 
+            'data-control-start', 'data-control-by', 'data-control-total', 
+            'data-control-page', 'data-control-response-path', 
+            'data-control-filter'
+        ];
+        this.observer = new MutationObserver(mutations => {
+            let needsReInitialize = false;
+            let needsRefresh = false;
+            mutations.forEach(mutation => {
+                if (mutation.type === 'attributes' && mutation.attributeName && attributesToObserve.includes(mutation.attributeName)) {
+                    const newValue = this.articleContainer.getAttribute(mutation.attributeName);
+                    if (mutation.attributeName === 'data-src') {
+                        needsReInitialize = true;
+                    } else {
+                        this.updateAttributeValue(mutation.attributeName, newValue);
+                        needsRefresh = true;
+                    }
+                }
+            });
+            if (needsReInitialize) {
+                 this.initialize().catch(e => console.error("Error re-initializing on attribute change", e));
+            } else if (needsRefresh) {
+                this.refresh();
+            }
+        });
+        this.observer.observe(this.articleContainer, { attributes: true });
         this.observerActive = true;
     }
 
-    /**
-     * Desactiva el MutationObserver.
-     */
     public disableObserver(): void {
         if (this.observer) {
             this.observer.disconnect();
             this.observer = null;
-            this.observerActive = false;
+        }
+        this.observerActive = false;
+    }
+
+    private updateAttributeValue(attributeName: string, value: string | null): void {
+        // const oldCurrentPage = this.currentPage; // Not needed if refresh is called by observer
+        switch (attributeName) {
+            case 'data-control-limit': this.controlLimit = this.validateNumber(value, attributeName); break;
+            case 'data-control-order': this.controlOrder = value?.toUpperCase() || 'ASC'; break;
+            case 'data-control-start': this.controlStart = this.validateNumber(value, attributeName) || 0; break;
+            case 'data-control-by': this.controlBy = value; break;
+            case 'data-control-total': this.controlTotal = this.validateNumber(value, attributeName); break;
+            case 'data-control-page': this.currentPage = Math.max(1, this.validateNumber(value, attributeName) || 1); break;
+            case 'data-control-response-path': this.controlResponsePath = value; break;
+            case 'data-control-filter': this.controlFilter = value; break;
         }
     }
 
-    /**
-     * Maneja cambios en los atributos detectados por el MutationObserver.
-     * @param attributeName Nombre del atributo que cambió.
-     */
-    private handleAttrChange(attributeName: string): void {
-        this.refresh(); // Simplemente refrescamos la sección
-    }
-
-    /**
-     * Valida que un valor sea un número válido.
-     * @param value Valor a validar.
-     * @param attributeName Nombre del atributo (para mensajes de error).
-     * @returns El número validado o null si no es válido.
-     */
-    private validateNumber(value: string | null | undefined, attributeName: string): number | null {
-        if (value === null || value === undefined || value === "") return null;
-        const number = Number(value);
-        if (isNaN(number)) {
-            console.error(`Error: El atributo ${attributeName} debe ser un número.`);
-            return null;
+    public setAttribute(attributeName: string, value: string | null): void {
+        if (value === null) {
+            this.articleContainer.removeAttribute(attributeName);
+        } else {
+            this.articleContainer.setAttribute(attributeName, value);
         }
-        return number;
+        if (!this.observerActive && (attributeName.startsWith('data-control-'))) {
+            this.updateAttributeValue(attributeName, value); 
+            this.refresh();
+        }
     }
 
-    /**
-     * Carga los datos desde la fuente especificada en dataSourceURL.
-     * @returns Los datos cargados.
-     */
-    private async load(): Promise<any> {
-        if (!this.dataSourceURL) return null;
-    
-        try {
-            if (this.dataSourceURL.trim().startsWith('[') || this.dataSourceURL.trim().startsWith('{')) {
-                const inlineData = JSON.parse(this.dataSourceURL);
-                this.data = Array.isArray(inlineData) ? inlineData : [inlineData];
-                this.articleContainer.dispatchEvent(new CustomEvent('sectionjs:datachanged', { detail: { data: this.data } }));
-                return inlineData;
+    public dispatchEvent(type: SectionJSEventType, detail: Partial<SectionJSEventDetail> = {}): void {
+        const eventDetail: SectionJSEventDetail = { instance: this, ...detail };
+        this.articleContainer.dispatchEvent(new CustomEvent(type, { detail: eventDetail, bubbles: true }));
+    }
+
+    public destroy(): void {
+        this.disableObserver();
+        this.articleContainer.innerHTML = this.initialContainerStructureHTML; 
+        this.articleContainer.removeAttribute('data-section-rendered');
+
+        const index = SectionJS.instances.indexOf(this);
+        if (index > -1) SectionJS.instances.splice(index, 1);
+
+        SectionJS.instancesRefs = SectionJS.instancesRefs.filter(refOrInstance => {
+            if (SectionJS.supportsWeakRef && refOrInstance instanceof WeakRef) {
+                const instance = refOrInstance.deref();
+                if (!instance || instance === this) {
+                    if (SectionJS.finalizationRegistry && instance === this) {
+                        // SectionJS.finalizationRegistry.unregister(refOrInstance); 
+                    }
+                    return false; 
+                }
+                return true; 
             } else {
-                const response = await fetch(this.dataSourceURL);
-                if (!response.ok) throw new Error(`Error: ${response.status}`);
-                const contentType = response.headers.get("Content-Type");
-    
-                if (contentType?.includes("application/json")) {
-                    const fullJsonData = await response.json();
-                    let filteredJsonData = this.responsePath ? this.getValue(fullJsonData, this.responsePath) : fullJsonData;
-                    this.data = Array.isArray(filteredJsonData) ? filteredJsonData : [filteredJsonData];
-                    this.articleContainer.dispatchEvent(new CustomEvent('sectionjs:datachanged', { detail: { data: this.data } }));
-                    return fullJsonData;
-                } else {
-                    const textData = await response.text();
-                    this.data = [textData];
-                    return textData;
-                }
-            }
-        } catch (error) {
-            this.articleContainer.dispatchEvent(
-                new CustomEvent('sectionjs:error', {
-                    detail: {
-                        error: error,
-                        message: "Error al cargar datos",
-                        sectionId: this.articleContainer.id
-                    }
-                })
-            );
-            throw error;
-        }
-    }
-
-    /**
-     * Busca un valor específico en los datos cargados.
-     * @param fullData Datos completos (opcional, si no se proporciona, se cargan automáticamente).
-     */
-    private async findKeyValue(fullData: any = null): Promise<void> {
-        if (!this.articleContainer) return;
-        const findKey = this.articleContainer.getAttribute('data-find');
-        const defaultValue = this.articleContainer.getAttribute('data-find-default') || 'none';
-
-        try {
-            if (!fullData) fullData = await this.load();
-            if (findKey) {
-                const value = this.getValue(fullData, findKey) || defaultValue;
-                this.articleContainer.setAttribute('data-find-value', value);
-            }
-        } catch (error) {
-            console.error("Error en findValue:", error);
-        }
-    }
-
-    /**
-     * Actualiza los atributos de la instancia en función del contenedor.
-     */
-    private updateAttrs(): void {
-        this.dataSourceURL = this.articleContainer.getAttribute('data-section');
-        this.limit = this.validateNumber(this.articleContainer.getAttribute('data-limit'), 'data-limit');
-        this.order = this.articleContainer.getAttribute('data-order') || 'ASC';
-        this.start = this.validateNumber(this.articleContainer.getAttribute('data-start'), 'data-start') || 0;
-        this.orderBy = this.articleContainer.getAttribute('data-by');
-        this.total = this.validateNumber(this.articleContainer.getAttribute('data-total'), 'data-total');
-        this.defaultPage = Math.max(1, this.validateNumber(this.articleContainer.getAttribute('data-default-page'), 'data-default-page') || 1);
-        this.responsePath = this.articleContainer.getAttribute('data-response-path');
-        this.findKey = this.articleContainer.getAttribute('data-find');
-    }
-
-    /**
-     * Obtiene los datos de una página específica.
-     * @param page Número de la página.
-     * @returns Los datos de la página.
-     */
-    private getPage(page: number): any[] {
-        if (!this.data) return [];
-        let dataToUse = this.data;
-
-        // Ordenar los datos si se especifica un orden
-        if (Array.isArray(dataToUse) && this.orderBy) {
-            dataToUse = dataToUse.slice().sort((a, b) => {
-                const valueA = this.getValue(a, this.orderBy!);
-                const valueB = this.getValue(b, this.orderBy!);
-                return this.order.toLowerCase() === 'asc' ? (valueA < valueB ? -1 : 1) : (valueA > valueB ? -1 : 1);
-            });
-        }
-
-        // Calcular índices de la página
-        const pageSize = this.limit ?? dataToUse.length;
-        const startIndex = (page - 1) * pageSize + this.start;
-        const endIndex = Math.min(startIndex + pageSize, this.total ?? dataToUse.length);
-
-        return dataToUse.slice(startIndex, endIndex);
-    }
-
-    /**
-     * Renderiza los datos en el contenedor.
-     * @param pageData Datos de la página a renderizar.
-     */
-    private render(pageData: any[]): void {
-        if (!this.articleContainer) return;
-
-        const elementosOrdenados: Element[] = [];
-        let plantilla: Element | null = null;
-
-        // Desactivar temporalmente el observer
-        const wasObserverActive = this.observerActive;
-        if (wasObserverActive) {
-            this.disableObserver();
-        }
-
-        // Recorrer los elementos hijos del contenedor
-        Array.from(this.articleContainer.children).forEach((elemento) => {
-            const element = elemento as HTMLElement;
-
-            // Si el elemento es estático, lo agregamos al array de elementos ordenados
-            if (element.hasAttribute('data-section-static')) {
-                elementosOrdenados.push(element);
-                element.remove(); // Lo removemos temporalmente del contenedor
-            }
-            // Si el elemento es candidato a plantilla (el primero que no es estático o tiene data-section-render)
-            else if (element.hasAttribute('data-section-render') || !plantilla) {
-                if (!plantilla) {
-                    plantilla = element;
-                    this.articleTemplate = this.articleTemplate ?? plantilla;
-
-                    if (!this.articleTemplate || !(this.articleTemplate instanceof HTMLElement)) {
-                        throw new Error("No se pudo encontrar una plantilla válida en el contenedor.");
-                    }
-
-                    // Renderizar los datos usando la plantilla
-                    pageData.forEach((articleData: any) => {
-                        const elementoRenderizado = this.articleTemplate!.cloneNode(true) as HTMLElement;
-                        elementoRenderizado.querySelectorAll('*').forEach((el: Element) => {
-                            this.processText(el, articleData);
-                            this.processAttrs(el, articleData);
-                            this.assignSrc(el);
-                        });
-                        elementosOrdenados.push(elementoRenderizado);
-                    });
-                }
-                element.remove(); // Remover la plantilla original del contenedor
-            }
-            // Si el elemento no es estático ni plantilla, lo removemos
-            else {
-                element.remove();
+                return refOrInstance !== this; 
             }
         });
-
-        // Agregar los elementos ordenados de vuelta al contenedor
-        elementosOrdenados.forEach(elemento => this.articleContainer.appendChild(elemento));
-
-        // Marcar el contenedor como renderizado
-        this.articleContainer.setAttribute('data-section-rendered', 'true');
-
-        // Reactivar el observer si estaba activo
-        if (wasObserverActive) {
-            this.enableObserver();
-        }
-
-        // Reconectar botones, actualizar info y botones
-        this.reconnectButtons();
-        this.updateInfo();
-        this.updateButtons();
-
-        // Disparar evento de renderizado con los elementos correctos
-        this.articleContainer.dispatchEvent(
-            new CustomEvent('sectionjs:rendered', {
-                detail: {
-                    pageData,
-                    renderedElements: elementosOrdenados.filter(el => !el.hasAttribute('data-section-static')), // Solo elementos dinámicos
-                    templateUsed: this.articleTemplate!
-                }
-            })
-        );
+        this.loopDefinitions.clear();
+        this.allData = null;
+        this.data = null;
     }
 
-    /**
-     * Reconecta los botones de paginación.
-     */
-    private reconnectButtons(): void {
-        if (!this.articleContainer) return;
-
-        // Seleccionar botones dentro de contenedores estáticos o fuera del contenedor principal
-        const prevButtons = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="prev"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="prev"]`))
-        ].filter(button => button !== null) as HTMLButtonElement[];
-
-        const nextButtons = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="next"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="next"]`))
-        ].filter(button => button !== null) as HTMLButtonElement[];
-
-        // Asignar eventos a los botones
-        prevButtons.forEach(button => button.onclick = () => this.paginate('prev'));
-        nextButtons.forEach(button => button.onclick = () => this.paginate('next'));
+    public static destroyAll(): void {
+        [...SectionJS.instances].forEach(instance => instance.destroy()); 
     }
 
-    /**
-     * Procesa el texto de un elemento y reemplaza las variables con los datos.
-     * @param element Elemento a procesar.
-     * @param data Datos a utilizar para el reemplazo.
-     */
-    private processText(element: Element, data: any): void {
-        Array.from(element.childNodes)
-            .filter(node => node.nodeType === Node.TEXT_NODE)
-            .forEach(textNode => {
-                textNode.textContent = this.replaceText(textNode.textContent || '', data);
-            });
-    }
-
-    /**
-     * Procesa los atributos de un elemento y reemplaza las variables con los datos.
-     * @param element Elemento a procesar.
-     * @param data Datos a utilizar para el reemplazo.
-     */
-    private processAttrs(element: Element, data: any): void {
-        Array.from(element.attributes).forEach(attr => {
-            element.setAttribute(attr.name, this.replaceText(attr.value, data));
-        });
-    }
-
-    /**
-     * Asigna el atributo `src` a elementos multimedia (img, audio, video) si tienen `data-src`.
-     * @param element Elemento a procesar.
-     */
-    private assignSrc(element: Element): void {
-        if (['IMG', 'AUDIO', 'VIDEO'].includes(element.tagName) && element.hasAttribute('data-src')) {
-            element.setAttribute('src', element.getAttribute('data-src')!);
+    public static forceGarbageCollection(): void {
+        if (typeof gc === 'function') {
+            gc(); 
+        } else {
+            console.warn("gc() is not available in this environment.");
         }
     }
-
-    /**
-     * Reemplaza las variables en un texto con los valores correspondientes de los datos.
-     * @param text Texto a procesar.
-     * @param data Datos a utilizar para el reemplazo.
-     * @returns Texto con las variables reemplazadas.
-     */
-    private replaceText(text: string, data: any): string {
-        return text.replace(/{{\s*([^}]+?)\s*}}/g, (_, clave) => {
-            return this.getValue(data, clave.trim()) || '';
-        });
-    }
-
-    /**
-     * Obtiene un valor de un objeto utilizando una clave en formato de ruta (ej: "user.name").
-     * @param obj Objeto del cual obtener el valor.
-     * @param key Clave en formato de ruta.
-     * @returns El valor encontrado o una cadena vacía si no existe.
-     */
-    private getValue(obj: any, key: string): any {
-        return key.split('.').reduce((value, k) => (value && typeof value === 'object' ? value[k] : ''), obj);
-    }
-
-    /**
-     * Actualiza los elementos de información (paginación, etc.).
-     */
-    private updateInfo(): void {
-        if (!this.articleContainer || !this.spanElements.length || !(this.infoTemplates as Element[]).length) return;
-
-        const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
-        this.totalPages = totalPages;
-        const itemsTotal = this.data?.length || 0;
-        this.itemsTotal = itemsTotal;
-        const itemsNow = this.getPage(this.currentPage).length;
-        this.itemsNow = itemsNow;
-
-        const firstItemIndex = (this.currentPage - 1) * (this.limit || 0) + 1;
-        this.firstItemIndex = firstItemIndex;
-        const lastItemIndex = Math.min(firstItemIndex + (this.limit || 0) - 1, itemsTotal);
-        this.lastItemIndex = lastItemIndex;
-
-        const infoVariables = {
-            currentPage: this.currentPage,
-            totalPages: totalPages,
-            itemsNow: itemsNow,
-            itemsTotal: itemsTotal,
-            firstItemIndex: firstItemIndex,
-            lastItemIndex: lastItemIndex,
-            dataTotal: this.dataTotal
-        };
-
-        const infoElements = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="info"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"] [data-action="info"]`))
-        ].filter(element => element !== null) as HTMLElement[];
-
-        infoElements.forEach((infoElement, index) => {
-            const template = this.infoTemplates![index].textContent || '';
-            infoElement.textContent = this.replaceText(template, infoVariables);
-        });
-    }
-    /**
-     * Actualiza el estado de los botones de paginación.
-     */
-    private updateButtons(): void {
-        if (!this.articleContainer) return;
-
-        const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
-
-        // Seleccionar botones dentro de contenedores estáticos o fuera del contenedor principal
-        const prevButtons = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="prev"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="prev"]`))
-        ].filter(button => button !== null) as HTMLButtonElement[];
-
-        const nextButtons = [
-            ...Array.from(this.articleContainer.querySelectorAll('[data-section-static] [data-action="next"]')),
-            ...Array.from(document.querySelectorAll(`[data-target="${this.articleContainer.id}"][data-action="next"]`))
-        ].filter(button => button !== null) as HTMLButtonElement[];
-
-        // Actualizar el estado de los botones
-        prevButtons.forEach(button => button.disabled = this.currentPage === 1);
-        nextButtons.forEach(button => button.disabled = this.currentPage === totalPages);
-    }
-
-    /**
-     * Refresca la sección en función de los cambios en los atributos.
-     */
-    private async refresh(): Promise<void> {
-        if (!this.articleContainer) return;
-
-        const currentAttributes = {
-            limit: this.limit,
-            order: this.order,
-            start: this.start,
-            orderBy: this.orderBy,
-            total: this.total,
-            defaultPage: this.defaultPage,
-            dataSourceURL: this.dataSourceURL,
-            findKey: this.findKey
-        };
-
-        this.updateAttrs();
-
-        if (currentAttributes.limit !== this.limit || currentAttributes.order !== this.order ||
-            currentAttributes.start !== this.start || currentAttributes.orderBy !== this.orderBy ||
-            currentAttributes.total !== this.total || currentAttributes.defaultPage !== this.defaultPage ||
-            currentAttributes.dataSourceURL !== this.dataSourceURL || currentAttributes.findKey !== this.findKey) {
-
-            if (this.dataSourceURL && (currentAttributes.total !== this.total || currentAttributes.dataSourceURL !== this.dataSourceURL)) {
-                await this.load();
-            }
-            if (currentAttributes.findKey !== this.findKey) {
-                await this.findKeyValue();
-            }
-            if (currentAttributes.defaultPage !== this.defaultPage) {
-                this.currentPage = this.defaultPage;
-            }
-
-            const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
-            this.currentPage = Math.min(this.currentPage, totalPages);
-
-            this.render(this.getPage(this.currentPage));
-        }
-    }
-
-    /**
-     * Navega entre las páginas.
-     * @param action Acción a realizar ('prev' o 'next').
-     */
-    private paginate(action: 'prev' | 'next'): void {
-        if (!this.articleContainer || !this.data) return;
-
-        const totalPages = Math.ceil(this.data.length / (this.limit || this.data.length));
-
-        if (action === 'prev' && this.currentPage > 1) {
-            this.currentPage--;
-        } else if (action === 'next' && this.currentPage < totalPages) {
-            this.currentPage++;
-        }
-
-        this.render(this.getPage(this.currentPage));
-    }
-
-    /**
-     * Agrega un listener para el evento 'sectionjs:getdata'.
-     */
-    private addListener(): void {
-        if (!this.articleContainer) return;
-        this.articleContainer.addEventListener('sectionjs:getdata', (event: Event) => {
-            const customEvent = event as CustomEvent;
-            const data = customEvent.detail.data;
-            const value = data && this.data ? this.getValue(this.data, data) : this.data;
-            this.articleContainer.dispatchEvent(new CustomEvent(`sectionjs:getdata:${data || 'all'}`, { detail: { value } }));
-        });
-    }
-
-    /**
-     * Inicializa todas las instancias de SectionJS en la página.
-     */
-    public static async initAll(): Promise<void> {
-        const articleContainers: NodeListOf<HTMLElement> | any = document.querySelectorAll<HTMLElement>('[data-section]');
-        if (articleContainers.length === 0) {
-            console.log("SectionJS: data-section no encontrado. SectionJS inactivo.");
-            return;
-        }
-
-        SectionJS.instances = [];
-        for (const articleContainer of articleContainers) {
-            const section = new SectionJS(articleContainer);
-            SectionJS.instances.push(section);
-            await section.initSelf(); // Inicializar cada instancia individualmente
-        }
-    }
-
-    /**
-     * Inicializa la instancia actual de SectionJS.
-     */
-    public async initSelf(): Promise<void> {
-        this.addListener();
-        await this.load();
-        await this.findKeyValue();
-
-        const totalPages = Math.ceil((this.data?.length || 0) / (this.limit || this.data?.length || 1));
-        this.currentPage = Math.min(this.currentPage, totalPages);
-
-        // Verificar si los artículos ya están renderizados
-        const hasRenderedArticles = this.articleContainer.hasAttribute('data-section-rendered');
-        if (!hasRenderedArticles) {
-            this.render(this.getPage(this.currentPage));
-        }
-
-        // Reconectar botones de paginación
-        const paginationContainer = document.querySelector(`[data-target="${this.articleContainer.id}"]`);
-        const prevButton = paginationContainer?.querySelector('button[data-action="prev"]') as HTMLButtonElement | null;
-        const nextButton = paginationContainer?.querySelector('button[data-action="next"]') as HTMLButtonElement | null;
-
-        if (prevButton) prevButton.onclick = () => this.paginate('prev');
-        if (nextButton) nextButton.onclick = () => this.paginate('next');
-    }
-
-    /**
-     * Aplica un cambio en un atributo del contenedor y refresca la sección.
-     * @param containerId ID del contenedor.
-     * @param attributeName Nombre del atributo a cambiar.
-     * @param attributeValue Nuevo valor del atributo.
-     */
-    public static async apply(containerId: string, attributeName: string, attributeValue: string | number): Promise<void> {
-        const articleContainer = document.getElementById(containerId);
-        if (articleContainer) {
-            const section = SectionJS.instances.find(instance => instance.articleContainer === articleContainer);
-            if (section) {
-                const wasObserverActive = section.observerActive; // Guardar el estado del Observer
-                if (wasObserverActive) {
-                    section.disableObserver(); // Desactivar el Observer solo si estaba activo
-                }
-
-                const currentValue = section.articleContainer.getAttribute(attributeName);
-                if (currentValue !== attributeValue.toString()) {
-                    section.articleContainer.setAttribute(attributeName, attributeValue.toString());
-                    await section.refresh();
-                }
-
-                if (wasObserverActive) {
-                    section.enableObserver(); // Reactivar el Observer solo si estaba activo
-                }
-            }
-        }
-    }
-
-    /**
-     * Cambia un atributo del contenedor y refresca la sección.
-     * @param attributeName Nombre del atributo a cambiar.
-     * @param attributeValue Nuevo valor del atributo.
-     */
-    public async setAttribute(attributeName: string, attributeValue: string | number): Promise<void> {
-        const wasObserverActive = this.observerActive;
-        if (wasObserverActive) {
-            this.disableObserver();
-        }
-
-        const currentValue = this.articleContainer.getAttribute(attributeName);
-        if (currentValue !== attributeValue.toString()) {
-            this.articleContainer.setAttribute(attributeName, attributeValue.toString());
-            await this.refresh();
-        }
-
-        if (wasObserverActive) {
-            this.enableObserver();
-        }
-    }
-    
-    /**
-     * Escucha solicitudes de datos específicos y permite responder.
-     */
-    public onDataRequest<T>(key: string, handler: (query?: any) => T | Promise<T>): void {
-        this.articleContainer.addEventListener(
-            `sectionjs:getdata:${key}`,
-            async (e: Event) => {
-                const customEvent = e as CustomEvent<GetDataEventDetail>;
-                try {
-                    const result = await handler(customEvent.detail.query);
-                    this.articleContainer.dispatchEvent(
-                        new CustomEvent(`sectionjs:dataresponse:${key}`, {
-                            detail: {
-                                data: result,
-                                sectionId: this.name || '',
-                                timestamp: Date.now()
-                            } as DataResponseEventDetail<T>
-                        })
-                    );
-                } catch (error) {
-                    this.articleContainer.dispatchEvent(
-                        new CustomEvent(`sectionjs:dataerror:${key}`, {
-                            detail: {
-                                error: error instanceof Error ? error : new Error(String(error)),
-                                message: "Error en solicitud de datos",
-                                sectionId: this.name || '',
-                                timestamp: Date.now()
-                            } as ErrorEventDetail
-                        })
-                    );
-                }
-            }
-        );
-    }
-
-    /**
-     * Solicita datos y espera respuesta (similar a fetch()).
-     */
-    public async requestData<T>(key: string, query?: any, timeout: number = 5000): Promise<T> {
-        return new Promise((resolve, reject) => {
-            const controller = new AbortController();
-            const timestamp = Date.now();
-
-            const responseListener = (e: Event) => {
-                const customEvent = e as CustomEvent<DataResponseEventDetail<T>>;
-                clearTimeout(timeoutId);
-                resolve(customEvent.detail.data);
-                controller.abort();
-            };
-
-            const errorListener = (e: Event) => {
-                const customEvent = e as CustomEvent<ErrorEventDetail>;
-                clearTimeout(timeoutId);
-                reject(customEvent.detail.error);
-                controller.abort();
-            };
-
-            const timeoutId = setTimeout(() => {
-                reject(new Error(`Solicitud '${key}' excedió el tiempo de espera (${timeout}ms)`));
-                controller.abort();
-            }, timeout);
-
-            this.articleContainer.addEventListener(
-                `sectionjs:dataresponse:${key}`,
-                responseListener,
-                { signal: controller.signal }
-            );
-            
-            this.articleContainer.addEventListener(
-                `sectionjs:dataerror:${key}`,
-                errorListener,
-                { signal: controller.signal }
-            );
-
-            this.articleContainer.dispatchEvent(
-                new CustomEvent(`sectionjs:getdata:${key}`, {
-                    detail: {
-                        key,
-                        query,
-                        sectionId: this.name || '',
-                        timestamp
-                    } as GetDataEventDetail
-                })
-            );
-        });
-    }
-
-    
-  /**
- * Escucha cuando se solicita datos específicos (getdata).
- * @param callback Función que maneja la solicitud.
- */
-public onGetData(callback: (dataKey: string) => void): void {
-    this.articleContainer.addEventListener('sectionjs:getdata', (e: Event) => {
-        const customEvent = e as CustomEvent<{ key: string }>; // ← Cambio crítico en el tipado
-        callback(customEvent.detail.key); // ← Usar 'key' en lugar de 'data'
-    });
 }
 
- // Métodos de eventos actualizados
- public onRendered(callback: (detail: RenderEventDetail) => void): void {
-    this.articleContainer.addEventListener('sectionjs:rendered', (e: Event) => {
-        const customEvent = e as CustomEvent<RenderEventDetail>;
-        callback(customEvent.detail);
-    });
-}
-
-public onDataChanged(callback: (data: any[]) => void): void {
-    this.articleContainer.addEventListener('sectionjs:datachanged', (e: Event) => {
-        const customEvent = e as CustomEvent<DataResponseEventDetail<any[]>>;
-        callback(customEvent.detail.data);
-    });
-}
-
-public onError(callback: (error: Error, message: string) => void): void {
-    this.articleContainer.addEventListener('sectionjs:error', (e: Event) => {
-        const customEvent = e as CustomEvent<ErrorEventDetail>;
-        const error = customEvent.detail.error instanceof Error 
-            ? customEvent.detail.error 
-            : new Error(String(customEvent.detail.error));
-        callback(error, customEvent.detail.message);
-    });
-}
-    public static stopAll(): void {
-        SectionJS.instances.forEach(instance => {
-            instance.articleContainer.replaceWith(instance.articleContainer.cloneNode(true));
-       
-            if (instance.observer) {
-                instance.observer.disconnect();
-                instance.observer = null;
-            }
-            
-            instance.articleContainer.removeAttribute('data-section-rendered');
-            instance.articleContainer.innerHTML = '';
-            
-            instance.articleTemplate = null;
-            instance.infoTemplates = null;
-            instance.data = null;
-        });
-        
-        SectionJS.instances = [];
-    }
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SectionJS;
+} else if (typeof window !== 'undefined') {
+    (window as any).SectionJS = SectionJS;
 }
