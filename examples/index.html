@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Demo SectionJS - Latest</title>
+    <title>SectionJS - Demo Final Simplificado</title>
+    <script src="../dist/sectionjs.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -44,6 +45,7 @@
             justify-content: space-between;
             align-items: center;
             margin-top: 20px;
+            padding-bottom: 15px; /* Added padding for separation */
         }
         .pagination button {
             padding: 10px 20px;
@@ -66,6 +68,10 @@
             color: #dc3545;
             text-align: center;
             margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #dc3545;
+            border-radius: 5px;
+            background-color: #f8d7da;
         }
     </style>
 </head>
@@ -76,73 +82,89 @@
 
     <!-- Contenedor de artículos -->
     <div id="my-article-container" 
-         data-section="https://jsonplaceholder.typicode.com/posts" 
-         data-limit="5" 
-         data-order="ASC">
-          <div data-section-static>
+         data-src="https://jsonplaceholder.typicode.com/posts" 
+         data-control-limit="5" 
+         data-control-by="id"
+         data-control-order="ASC">
+        
+        <!-- Información de paginación y controles -->
+        <div>
             <div class="pagination">
-                <button data-action="prev">Anterior</button>
-                <span data-action="info"> <span data-action="info">Página {{currentPage}} de {{totalPages}}</span>
-                <span data-action="info">(Mostrando {{itemsNow}} de {{itemsTotal}} artículos)</span></span>
-                <button data-action="next">Siguiente</button>
-            </div>
-        </div>
-        <!-- Plantilla para renderizar artículos -->
-        <div data-section-render>
-            <div class="article">
-                <h2>{{title}}</h2>
-                <p>{{body}}</p>
+                <button data-logic-on-click="_instance.prevPage()" 
+                        data-attr-disabled="{{* currentPage <= 1 *}}">Anterior</button>
+                <span>
+                    Página {{ currentPage }} de {{ totalPages }} 
+                    (Mostrando {{ itemsNow }} de {{ itemsTotal }} artículos)
+                </span>
+                <button data-logic-on-click="_instance.nextPage()" 
+                        data-attr-disabled="{{* currentPage >= totalPages *}}">Siguiente</button>
             </div>
         </div>
 
-        <!-- Contenedor estático para botones de paginación e información -->
-        <div data-section-static>
-            <div class="pagination">
-                <button data-action="prev">Anterior</button>
-                <span data-action="info">Página {{currentPage}} de {{totalPages}}</span>
-                <button data-action="next">Siguiente</button>
-            </div>
+        <!-- Plantilla para renderizar artículos -->
+        <div class="article" data-logic-each="item in _instance.data">
+            <h2>{{ item.id }}. {{ item.title }}</h2>
+            <p>{{ item.body }}</p>
         </div>
 
         <!-- Mensaje de error -->
-        <div class="error-message" style="display: none;">
-            Error al cargar los datos. Por favor, inténtalo de nuevo más tarde.
+        <div class="error-message" data-logic-if="_instance.allData === null && !_instance.isInitializing">
+            Error al cargar los datos o no hay datos disponibles.
+        </div>
+        
+        <div class="pagination">
+            <button data-logic-on-click="_instance.prevPage()" 
+                    data-attr-disabled="{{* currentPage <= 1 *}}">Anterior</button>
+            <span>
+                Página {{ currentPage }} de {{ totalPages }} 
+                (Mostrando {{ itemsNow }} de {{ itemsTotal }} artículos)
+            </span>
+            <button data-logic-on-click="_instance.nextPage()" 
+                    data-attr-disabled="{{* currentPage >= totalPages *}}">Siguiente</button>
         </div>
     </div>
 
-  </div>
     <!-- Incluir SectionJS -->
-    <script src="../dist/sectionjs.min.js"></script>
+    <script src="sectionjs.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Obtener el contenedor de artículos
-            const container = document.getElementById('my-article-container');
+            // const container = document.getElementById('my-article-container'); // No es necesario si usamos initAll
 
-            // Crear una instancia de SectionJS
-            const sectionInstance = new SectionJS(container);
+            SectionJS.initAll().then((instances) => {
+                console.log('SectionJS inicializado.');
+                const sectionInstance = instances.find(inst => inst.name === 'my-article-container');
 
-            // Inicializar SectionJS
-            sectionInstance.initSelf();
+                if (sectionInstance) {
+                    // Manejar errores
+                    sectionInstance.articleContainer.addEventListener('sectionjs:loadError', function (event) {
+                        const errorMessage = sectionInstance.articleContainer.querySelector('.error-message');
+                        if (errorMessage) {
+                            // La visibilidad del error ahora se puede manejar con data-logic-if
+                            // pero podrías hacer algo más aquí si es necesario.
+                            console.error('Error en SectionJS (evento loadError):', event.detail.error);
+                        }
+                    });
 
-            // Manejar errores
-            container.addEventListener('sectionjs:error', function (event) {
-                const errorMessage = container.querySelector('.error-message');
-                if (errorMessage) {
-                    errorMessage.style.display = 'block';
+                    // Manejar cambios en los datos
+                    sectionInstance.articleContainer.addEventListener('sectionjs:dataChanged', function (event) {
+                        console.log('Datos cambiados (evento dataChanged):', event.detail.data);
+                    });
+
+                    // Manejar eventos de renderizado
+                    sectionInstance.articleContainer.addEventListener('sectionjs:rendered', function (event) {
+                        console.log('Artículos renderizados (evento rendered):', event.detail.data); // event.detail.data es pageData
+                    });
                 }
-                console.error('Error en SectionJS:', event.detail.error);
-            });
-
-            // Manejar cambios en los datos
-            container.addEventListener('sectionjs:datachanged', function (event) {
-                console.log('Datos cargados:', event.detail.data);
-            });
-
-            // Manejar eventos de renderizado
-            container.addEventListener('sectionjs:rendered', function (event) {
-                console.log('Artículos renderizados:', event.detail.pageData);
+            }).catch(error => {
+                console.error('Error al inicializar SectionJS:', error);
+                const errDiv = document.createElement('div');
+                errDiv.className = 'error-message';
+                errDiv.textContent = 'Error crítico al inicializar SectionJS: ' + error.message;
+                document.body.prepend(errDiv);
             });
         });
     </script>
 </body>
 </html>
+
