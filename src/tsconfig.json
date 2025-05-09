@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+      "target": "ES2021",
+      "module": "commonjs",
+      "lib": [
+        "ES2021", // Clave para WeakRef y FinalizationRegistry
+        "DOM"
+      ],
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true
+    },
+    "include": [
+      "*.ts" // Esto le dice a tsc que compile todos los archivos .ts en el directorio
+    ]
+  }
